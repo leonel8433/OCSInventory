@@ -9,7 +9,7 @@ interface DashboardOverviewProps {
 }
 
 const DashboardOverview: React.FC<DashboardOverviewProps> = ({ onStartSchedule, onNavigate }) => {
-  const { vehicles, drivers, activeTrips, scheduledTrips, maintenanceRecords, currentUser, endTrip, notifications, markNotificationAsRead } = useFleet();
+  const { vehicles, drivers, activeTrips, scheduledTrips, maintenanceRecords, currentUser, endTrip, notifications, markNotificationAsRead, deleteScheduledTrip } = useFleet();
   const [elapsedTime, setElapsedTime] = useState<string>('00:00:00');
   
   // Alertas de Multa ao Logar
@@ -231,7 +231,7 @@ const DashboardOverview: React.FC<DashboardOverviewProps> = ({ onStartSchedule, 
                       {tripDate.toLocaleDateString('pt-BR', { month: 'short' })}
                     </span>
                   </div>
-                  <div className="flex-1">
+                  <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 mb-1">
                       <span className="text-[10px] font-mono bg-slate-900 text-white px-2 py-0.5 rounded">{vehicle?.plate}</span>
                       <span className="text-[10px] font-bold text-slate-400 uppercase">{vehicle?.model}</span>
@@ -239,9 +239,20 @@ const DashboardOverview: React.FC<DashboardOverviewProps> = ({ onStartSchedule, 
                     <h4 className="text-lg font-bold text-slate-800 truncate mb-1">{trip.destination}</h4>
                     <p className="text-[10px] text-slate-400 font-medium uppercase">{trip.city} / {trip.state}</p>
                   </div>
-                  <button onClick={() => onStartSchedule?.(trip.id)} className="w-full md:w-auto bg-indigo-600 text-white px-10 py-5 rounded-2xl font-write uppercase text-[10px] tracking-widest shadow-xl shadow-indigo-100 hover:bg-indigo-700 transition-all flex items-center justify-center gap-3">
-                    <i className="fas fa-play text-[8px]"></i> Iniciar Viagem
-                  </button>
+                  <div className="flex flex-col sm:flex-row gap-3 w-full md:w-auto">
+                    <button 
+                      onClick={() => onStartSchedule?.(trip.id)} 
+                      className="bg-indigo-600 text-white px-8 py-4 rounded-2xl font-write uppercase text-[10px] tracking-widest shadow-xl shadow-indigo-100 hover:bg-indigo-700 transition-all flex items-center justify-center gap-3"
+                    >
+                      <i className="fas fa-play text-[8px]"></i> Iniciar
+                    </button>
+                    <button 
+                      onClick={() => { if(window.confirm('Deseja cancelar este agendamento?')) deleteScheduledTrip(trip.id); }} 
+                      className="bg-white text-red-500 px-6 py-4 rounded-2xl font-write uppercase text-[10px] tracking-widest border border-red-100 hover:bg-red-50 transition-all flex items-center justify-center gap-2"
+                    >
+                      <i className="fas fa-xmark"></i> Cancelar
+                    </button>
+                  </div>
                 </div>
               );
             })}
