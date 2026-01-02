@@ -21,20 +21,23 @@ const AppContent: React.FC = () => {
   const isAdmin = currentUser?.username === 'admin';
 
   useEffect(() => {
+    const handleStartSchedule = (e: any) => {
+      setSelectedScheduleId(e.detail);
+      setActiveTab('operation');
+    };
+    window.addEventListener('start-schedule', handleStartSchedule);
+    return () => window.removeEventListener('start-schedule', handleStartSchedule);
+  }, []);
+
+  useEffect(() => {
     const restrictedTabs = ['fleet', 'drivers', 'monitoring'];
     if (!isAdmin && restrictedTabs.includes(activeTab)) {
       setActiveTab('dashboard');
     }
   }, [activeTab, isAdmin]);
 
-  if (!currentUser) {
-    return <Login />;
-  }
-
-  // Se for o primeiro acesso (senha não alterada), força a troca
-  if (currentUser && !currentUser.passwordChanged) {
-    return <ForceChangePassword />;
-  }
+  if (!currentUser) return <Login />;
+  if (currentUser && !currentUser.passwordChanged) return <ForceChangePassword />;
 
   const handleStartFromSchedule = (scheduleId: string) => {
     setSelectedScheduleId(scheduleId);
@@ -44,28 +47,31 @@ const AppContent: React.FC = () => {
   const renderContent = () => {
     switch (activeTab) {
       case 'dashboard':
-        return <DashboardOverview onStartSchedule={handleStartFromSchedule} />;
+        return <DashboardOverview onStartSchedule={handleStartFromSchedule} onNavigate={setActiveTab} />;
       case 'fleet':
-        return isAdmin ? <FleetManager /> : <DashboardOverview onStartSchedule={handleStartFromSchedule} />;
+        return isAdmin ? <FleetManager /> : <DashboardOverview onStartSchedule={handleStartFromSchedule} onNavigate={setActiveTab} />;
       case 'drivers':
-        return isAdmin ? <DriverManagement /> : <DashboardOverview onStartSchedule={handleStartFromSchedule} />;
+        return isAdmin ? <DriverManagement /> : <DashboardOverview onStartSchedule={handleStartFromSchedule} onNavigate={setActiveTab} />;
       case 'operation':
         return (
           <OperationWizard 
             scheduledTripId={selectedScheduleId || undefined} 
-            onComplete={() => setSelectedScheduleId(null)} 
+            onComplete={() => {
+              setSelectedScheduleId(null);
+              setActiveTab('dashboard'); // Redireciona para o dashboard após iniciar
+            }} 
           />
         );
       case 'history':
         return <HistoryPage />;
       case 'monitoring':
-        return isAdmin ? <TripMonitoring /> : <DashboardOverview onStartSchedule={handleStartFromSchedule} />;
+        return isAdmin ? <TripMonitoring /> : <DashboardOverview onStartSchedule={handleStartFromSchedule} onNavigate={setActiveTab} />;
       case 'scheduling':
         return <SchedulingPage />;
       case 'reports':
         return <ReportsPage />;
       default:
-        return <DashboardOverview onStartSchedule={handleStartFromSchedule} />;
+        return <DashboardOverview onStartSchedule={handleStartFromSchedule} onNavigate={setActiveTab} />;
     }
   };
 

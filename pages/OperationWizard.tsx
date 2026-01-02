@@ -2,7 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { useFleet } from '../context/FleetContext';
 import { Vehicle, Checklist, Trip, VehicleStatus } from '../types';
-import { checkSPRodizio } from '../utils/trafficRules';
+import { checkSPRodizio, getRodizioDayLabel, getRestrictedDigitsForDate } from '../utils/trafficRules';
 
 interface OperationWizardProps {
   scheduledTripId?: string;
@@ -29,9 +29,7 @@ const OperationWizard: React.FC<OperationWizardProps> = ({ scheduledTripId, onCo
     waypoints: [] as string[],
     city: '',
     state: '',
-    zipCode: '',
-    plannedDeparture: new Date().toISOString().slice(0, 16),
-    plannedArrival: '',
+    tripDate: new Date().toISOString().split('T')[0],
     observations: ''
   });
 
@@ -39,22 +37,20 @@ const OperationWizard: React.FC<OperationWizardProps> = ({ scheduledTripId, onCo
     if (scheduledTripId) {
       const schedule = scheduledTrips.find(s => s.id === scheduledTripId);
       if (schedule) {
+        setRoute(prev => ({
+          ...prev,
+          origin: schedule.origin || '',
+          destination: schedule.destination || '',
+          waypoints: schedule.waypoints || [],
+          city: schedule.city || '',
+          state: schedule.state || '',
+          tripDate: schedule.scheduledDate || new Date().toISOString().split('T')[0],
+          observations: schedule.notes || ''
+        }));
+        
         const vehicle = vehicles.find(v => v.id === schedule.vehicleId);
-        if (vehicle) {
-          setSelectedVehicle(vehicle);
-          setRoute({
-            origin: schedule.origin || '',
-            destination: schedule.destination || '',
-            waypoints: schedule.waypoints || [],
-            city: schedule.city || '',
-            state: schedule.state || '',
-            zipCode: schedule.zipCode || '',
-            plannedDeparture: new Date().toISOString().slice(0, 16),
-            plannedArrival: schedule.plannedArrival || '',
-            observations: schedule.notes || ''
-          });
-          setStep(2);
-        }
+        if (vehicle) setSelectedVehicle(vehicle);
+        setStep(2);
       }
     }
   }, [scheduledTripId, scheduledTrips, vehicles]);
@@ -64,54 +60,40 @@ const OperationWizard: React.FC<OperationWizardProps> = ({ scheduledTripId, onCo
       setChecklist(prev => ({ 
         ...prev, 
         km: selectedVehicle.currentKm, 
-        fuelLevel: selectedVehicle.fuelLevel,
-        oilChecked: false,
-        waterChecked: false,
-        tiresChecked: false 
+        fuelLevel: selectedVehicle.fuelLevel
       }));
     }
   }, [selectedVehicle]);
 
   const isKmInvalid = (checklist.km ?? 0) < (selectedVehicle?.currentKm ?? 0);
+  const isChecklistValid = checklist.oilChecked && checklist.waterChecked && checklist.tiresChecked && !isKmInvalid && (checklist.km ?? 0) > 0;
+  
+  const normalizeText = (txt: string) => txt.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim();
+  const cityNorm = normalizeText(route.city);
+  const stateNorm = normalizeText(route.state);
+  const isSaoPaulo = cityNorm.includes('sao paulo') || cityNorm === 'sp' || stateNorm === 'sp';
 
-  const isChecklistValid = 
-    checklist.oilChecked && 
-    checklist.waterChecked && 
-    checklist.tiresChecked && 
-    !isKmInvalid &&
-    (checklist.km ?? 0) > 0;
-
-  const handlePreviewMap = () => {
-    if (!route.origin || !route.destination) {
-      alert("Informe o endereço de partida e o endereço do destino para visualizar o mapa.");
-      return;
-    }
-    const origin = encodeURIComponent(route.origin);
-    const dest = encodeURIComponent(`${route.destination}${route.city ? ', ' + route.city : ''}`);
-    const wps = route.waypoints.length > 0 
-      ? `&waypoints=${route.waypoints.map(w => encodeURIComponent(w)).join('|')}` 
-      : '';
-    
-    window.open(`https://www.google.com/maps/dir/?api=1&origin=${origin}&destination=${dest}${wps}&travelmode=driving`, '_blank');
+  const getSafeTripDate = () => {
+    if (!route.tripDate) return new Date();
+    const [year, month, day] = route.tripDate.split('-').map(Number);
+    return new Date(year, month - 1, day, 12, 0, 0);
   };
 
   const handleStartTrip = () => {
-    if (!selectedVehicle || !currentUser) return;
+    if (!selectedVehicle || !currentUser) {
+      alert("Erro: Motorista ou Veículo não identificados.");
+      return;
+    }
     
     const deviceStartTime = new Date().toISOString();
-
     const newTrip: Trip = {
       id: Math.random().toString(36).substr(2, 9),
       driverId: currentUser.id,
       vehicleId: selectedVehicle.id,
       origin: route.origin,
       destination: route.destination,
-      waypoints: route.waypoints,
       city: route.city,
       state: route.state,
-      zipCode: route.zipCode,
-      plannedDeparture: route.plannedDeparture || deviceStartTime,
-      plannedArrival: route.plannedArrival,
       startTime: deviceStartTime,
       startKm: checklist.km || selectedVehicle.currentKm,
       observations: route.observations
@@ -125,265 +107,200 @@ const OperationWizard: React.FC<OperationWizardProps> = ({ scheduledTripId, onCo
       timestamp: deviceStartTime
     };
 
+    // 1. Inicia no contexto
     startTrip(newTrip, finalChecklist);
-    
-    if (scheduledTripId) {
-      deleteScheduledTrip(scheduledTripId);
-    }
+    if (scheduledTripId) deleteScheduledTrip(scheduledTripId);
 
-    alert('Viagem iniciada! A rota foi salva no histórico para verificação futura.');
-    setStep(1);
-    setSelectedVehicle(null);
-    setRoute({
-      origin: '',
-      destination: '',
-      waypoints: [],
-      city: '',
-      state: '',
-      zipCode: '',
-      plannedDeparture: new Date().toISOString().slice(0, 16),
-      plannedArrival: '',
-      observations: ''
-    });
+    // 2. Auto-abre o Google Maps com a rota
+    const originEnc = encodeURIComponent(route.origin);
+    const destEnc = encodeURIComponent(`${route.destination}, ${route.city} - ${route.state}`);
+    window.open(`https://www.google.com/maps/dir/?api=1&origin=${originEnc}&destination=${destEnc}&travelmode=driving`, '_blank');
+
+    alert('Viagem Iniciada! Abrindo rota no GPS...');
     onComplete?.();
   };
 
   return (
     <div className="max-w-4xl mx-auto py-4">
-      <div className="flex items-center justify-between mb-8 px-4">
+      <div className="flex items-center justify-between mb-10 px-4">
         {[
-          { step: 1, label: 'Veículo', icon: 'fa-truck-pickup' },
-          { step: 2, label: 'Checklist', icon: 'fa-clipboard-check' },
-          { step: 3, label: 'Rota', icon: 'fa-map-marked-alt' }
-        ].map((s) => (
-          <div key={s.step} className="flex flex-col items-center flex-1">
-            <div className={`w-10 h-10 rounded-full flex items-center justify-center border-2 transition-all ${
-              step >= s.step ? 'bg-blue-600 border-blue-600 text-white shadow-lg shadow-blue-200' : 'bg-white border-slate-200 text-slate-400'
+          { s: 1, label: 'Rota', icon: 'fa-map-location-dot' },
+          { s: 2, label: 'Veículo', icon: 'fa-truck-pickup' },
+          { s: 3, label: 'Checklist', icon: 'fa-clipboard-check' },
+          { s: 4, label: 'Início', icon: 'fa-flag-checkered' }
+        ].map((item) => (
+          <div key={item.s} className="flex flex-col items-center flex-1 relative">
+            <div className={`w-12 h-12 rounded-2xl flex items-center justify-center border-2 transition-all duration-500 z-10 ${
+              step >= item.s ? 'bg-slate-900 border-slate-900 text-white shadow-xl' : 'bg-white border-slate-100 text-slate-300'
             }`}>
-              <i className={`fas ${s.icon}`}></i>
+              <i className={`fas ${item.icon}`}></i>
             </div>
-            <span className={`text-[10px] mt-2 font-write uppercase tracking-wider ${step >= s.step ? 'text-blue-600' : 'text-slate-300'}`}>
-              {s.label}
+            <span className={`text-[9px] mt-3 font-write uppercase tracking-widest ${step >= item.s ? 'text-slate-900' : 'text-slate-300'}`}>
+              {item.label}
             </span>
+            {item.s < 4 && (
+              <div className={`absolute top-6 left-1/2 w-full h-[2px] -z-0 ${step > item.s ? 'bg-slate-900' : 'bg-slate-100'}`}></div>
+            )}
           </div>
         ))}
       </div>
 
-      <div className="bg-white rounded-3xl shadow-xl shadow-slate-200/50 border border-slate-100 overflow-hidden">
+      <div className="bg-white rounded-[2.5rem] shadow-2xl shadow-slate-200/50 border border-slate-100 overflow-hidden">
         {step === 1 && (
-          <div className="p-8">
-            <h3 className="text-xl font-bold text-slate-800 mb-6">Qual veículo você está pegando?</h3>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {vehicles.filter(v => v.status === VehicleStatus.AVAILABLE).map(v => {
-                const restrictedToday = checkSPRodizio(v.plate);
-                return (
-                  <button
-                    key={v.id}
-                    onClick={() => setSelectedVehicle(v)}
-                    className={`p-6 rounded-2xl border-2 text-left transition-all flex flex-col gap-4 relative ${
-                      selectedVehicle?.id === v.id ? 'border-blue-600 bg-blue-50 ring-4 ring-blue-100' : 'border-slate-100 hover:border-blue-200'
-                    }`}
-                  >
-                    {restrictedToday && (
-                       <div className="absolute top-2 right-2 flex items-center gap-1 bg-amber-500 text-black font-write text-[8px] px-1.5 py-0.5 rounded shadow-sm">
-                         <i className="fas fa-exclamation-triangle"></i> RODÍZIO SP HOJE
-                       </div>
-                    )}
-                    <div className="flex items-center gap-4">
-                      <div className="w-12 h-12 bg-white rounded-xl flex items-center justify-center text-blue-600 shadow-sm border border-slate-100">
-                        <i className="fas fa-truck text-xl"></i>
-                      </div>
-                      <div className="flex-1">
-                        <p className="text-lg font-bold text-slate-800">{v.plate}</p>
-                        <p className="text-xs text-slate-400 font-bold uppercase">{v.brand} {v.model}</p>
-                      </div>
-                    </div>
-                  </button>
-                );
-              })}
+          <div className="p-10 space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
+            <div className="flex items-center gap-4 border-b border-slate-50 pb-6">
+              <div className="w-12 h-12 bg-blue-50 text-blue-600 rounded-2xl flex items-center justify-center text-xl">
+                <i className="fas fa-route"></i>
+              </div>
+              <div>
+                <h3 className="text-xl font-bold text-slate-800">Definição do Trajeto</h3>
+                <p className="text-xs text-slate-400 font-medium uppercase tracking-widest">Informe localidade e endereços para validação</p>
+              </div>
             </div>
-            <div className="mt-8 flex justify-end">
-              <button
-                disabled={!selectedVehicle}
-                onClick={() => setStep(2)}
-                className="bg-blue-600 text-white px-8 py-4 rounded-2xl font-write uppercase text-xs tracking-widest hover:bg-blue-700 disabled:opacity-50 transition-all flex items-center gap-2"
-              >
-                Próximo Passo <i className="fas fa-arrow-right"></i>
-              </button>
+
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+              <div>
+                <label className="block text-[10px] font-write text-slate-400 uppercase mb-2 tracking-widest">Data da Viagem</label>
+                <input type="date" value={route.tripDate} onChange={(e) => setRoute({ ...route, tripDate: e.target.value })} className="w-full p-4 bg-slate-50 border border-slate-100 rounded-2xl focus:ring-2 focus:ring-blue-500 outline-none font-write text-slate-900" />
+              </div>
+              <div>
+                <label className="block text-[10px] font-write text-slate-400 uppercase mb-2 tracking-widest">Cidade de Destino</label>
+                <input placeholder="Ex: São Paulo" value={route.city} onChange={(e) => setRoute({ ...route, city: e.target.value })} className="w-full p-4 bg-slate-50 border border-slate-100 rounded-2xl focus:ring-2 focus:ring-blue-500 outline-none font-write text-slate-900" />
+              </div>
+              <div>
+                <label className="block text-[10px] font-write text-slate-400 uppercase mb-2 tracking-widest">Estado (UF)</label>
+                <input placeholder="Ex: SP" maxLength={2} value={route.state} onChange={(e) => setRoute({ ...route, state: e.target.value.toUpperCase() })} className="w-full p-4 bg-slate-50 border border-slate-100 rounded-2xl focus:ring-2 focus:ring-blue-500 outline-none font-write text-slate-900" />
+              </div>
+            </div>
+
+            {isSaoPaulo && (
+              <div className="bg-amber-50 border-2 border-amber-200 p-6 rounded-3xl flex items-start gap-4 animate-in fade-in slide-in-from-top-2 duration-300">
+                <div className="w-10 h-10 bg-amber-500 text-white rounded-xl flex items-center justify-center shrink-0 shadow-lg">
+                   <i className="fas fa-triangle-exclamation"></i>
+                </div>
+                <div>
+                  <h4 className="text-[10px] font-write text-amber-900 uppercase tracking-widest mb-1">Validação de Rodízio Ativa</h4>
+                  <p className="text-xs text-amber-800 font-medium leading-relaxed">Destino <b>São Paulo</b> identificado. Na próxima etapa, o sistema filtrará os veículos com restrição.</p>
+                </div>
+              </div>
+            )}
+
+            <div className="bg-slate-50 p-8 rounded-[2rem] border border-slate-100 space-y-6">
+              <div>
+                <label className="block text-[10px] font-write text-slate-400 uppercase mb-3 tracking-widest">Ponto de Origem</label>
+                <input placeholder="Logradouro, número, bairro..." value={route.origin} onChange={(e) => setRoute({ ...route, origin: e.target.value })} className="w-full p-4 bg-white rounded-2xl border border-slate-200 font-write text-slate-900 focus:ring-2 focus:ring-blue-500 outline-none shadow-sm" />
+              </div>
+              <div>
+                <label className="block text-[10px] font-write text-slate-400 uppercase mb-3 tracking-widest">Ponto de Chegada</label>
+                <input placeholder="Logradouro, número, bairro..." value={route.destination} onChange={(e) => setRoute({ ...route, destination: e.target.value })} className="w-full p-4 bg-white rounded-2xl border border-slate-200 font-write text-slate-900 focus:ring-2 focus:ring-blue-500 outline-none shadow-sm" />
+              </div>
+            </div>
+
+            <div className="flex justify-end pt-4">
+              <button disabled={!route.city || !route.state || !route.origin || !route.destination} onClick={() => setStep(2)} className="bg-slate-900 text-white px-12 py-5 rounded-2xl font-write uppercase text-xs tracking-widest hover:bg-blue-900 disabled:opacity-30 transition-all shadow-xl shadow-slate-200">Próximo: Veículo <i className="fas fa-arrow-right ml-2"></i></button>
             </div>
           </div>
         )}
 
         {step === 2 && (
-          <div className="p-8">
-            <h3 className="text-xl font-bold text-slate-800 mb-2">Checklist de Saída</h3>
-            <p className="text-slate-400 text-xs font-bold uppercase mb-8">Veículo: <span className="text-blue-600 underline">{selectedVehicle?.plate}</span></p>
+          <div className="p-10 space-y-8 animate-in slide-in-from-right-8 duration-500">
+            <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
+              <div>
+                <h3 className="text-xl font-bold text-slate-800">Seleção de Veículo</h3>
+                <p className="text-xs text-slate-400 font-medium uppercase tracking-widest mt-1">Viagem para: <span className="text-slate-900 font-bold">{route.city}/{route.state}</span></p>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+              {vehicles.filter(v => v.status === VehicleStatus.AVAILABLE).map(v => {
+                const tripDateObj = getSafeTripDate();
+                const restricted = isSaoPaulo && checkSPRodizio(v.plate, tripDateObj);
+                return (
+                  <button key={v.id} disabled={restricted} onClick={() => setSelectedVehicle(v)} className={`group p-6 rounded-3xl border-2 text-left transition-all relative overflow-hidden ${restricted ? 'bg-red-50 border-red-100 cursor-not-allowed opacity-80' : selectedVehicle?.id === v.id ? 'border-blue-600 bg-blue-50 ring-4 ring-blue-50' : 'border-slate-100 hover:border-blue-200 hover:bg-slate-50 shadow-sm'}`}>
+                    {restricted && (
+                      <div className="absolute inset-0 z-20 flex flex-col items-center justify-center bg-white/60 backdrop-blur-[1px] animate-in fade-in duration-300">
+                         <div className="bg-red-600 text-white px-4 py-2 rounded-xl text-[10px] font-write uppercase tracking-widest shadow-xl flex items-center gap-2 mb-2 scale-110"><i className="fas fa-ban"></i> RODÍZIO: {getRodizioDayLabel(v.plate)}</div>
+                         <p className="text-[9px] text-red-900 font-bold uppercase tracking-tight text-center px-4">Placa Final {v.plate.slice(-1)} bloqueada</p>
+                      </div>
+                    )}
+                    <div className="flex items-center gap-4">
+                      <div className={`w-14 h-14 rounded-2xl flex items-center justify-center text-xl shadow-sm border ${restricted ? 'bg-red-100 text-red-300 border-red-200' : 'bg-white text-blue-600 border-slate-100'}`}><i className={`fas ${restricted ? 'fa-triangle-exclamation' : 'fa-truck'}`}></i></div>
+                      <div className="flex-1 overflow-hidden"><p className={`text-xl font-write tracking-widest ${restricted ? 'text-red-300' : 'text-slate-900'}`}>{v.plate}</p><p className="text-[10px] text-slate-400 font-bold uppercase truncate">{v.model}</p></div>
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+
+            <div className="mt-10 flex justify-between pt-6 border-t border-slate-50">
+              <button onClick={() => setStep(1)} className="px-8 py-4 text-slate-400 font-write uppercase text-[10px] tracking-widest hover:text-slate-900">Voltar</button>
+              <button disabled={!selectedVehicle} onClick={() => setStep(3)} className="bg-slate-900 text-white px-12 py-5 rounded-2xl font-write uppercase text-xs tracking-widest shadow-xl disabled:opacity-20 transition-all">Próximo: Checklist</button>
+            </div>
+          </div>
+        )}
+
+        {step === 3 && (
+          <div className="p-10 space-y-8 animate-in slide-in-from-right-8 duration-500">
+            <div className="flex items-center justify-between">
+              <div>
+                <h3 className="text-xl font-bold text-slate-800">Checklist Técnico</h3>
+                <p className="text-xs text-slate-400 font-medium uppercase tracking-widest">Veículo: <span className="text-blue-600 font-bold">{selectedVehicle?.plate}</span></p>
+              </div>
+            </div>
             
-            <div className="space-y-6">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div>
-                  <label className="block text-xs font-write text-slate-400 uppercase tracking-widest mb-2">Quilometragem Inicial</label>
-                  <input
-                    type="number"
-                    min={selectedVehicle?.currentKm}
-                    value={checklist.km}
-                    onChange={(e) => setChecklist({ ...checklist, km: parseInt(e.target.value) || 0 })}
-                    className={`w-full p-4 rounded-2xl border font-write text-slate-800 text-lg focus:ring-2 outline-none transition-all ${
-                      isKmInvalid ? 'border-red-500 bg-red-50 focus:ring-red-200' : 'border-slate-200 bg-white focus:ring-blue-500'
-                    }`}
-                  />
-                  {isKmInvalid ? (
-                    <p className="text-[10px] mt-2 text-red-500 font-write uppercase animate-pulse">
-                      <i className="fas fa-circle-exclamation mr-1"></i> A quilometragem não pode ser menor que o registro atual ({selectedVehicle?.currentKm} km)
-                    </p>
-                  ) : (
-                    <p className="text-[10px] mt-2 text-slate-400 font-bold italic">Mínimo registrado: {selectedVehicle?.currentKm} km</p>
-                  )}
-                </div>
-                <div>
-                  <label className="block text-xs font-write text-slate-400 uppercase tracking-widest mb-2">Combustível</label>
-                  <input
-                    type="range"
-                    min="0"
-                    max="100"
-                    value={checklist.fuelLevel}
-                    onChange={(e) => setChecklist({ ...checklist, fuelLevel: parseInt(e.target.value) })}
-                    className="w-full h-2 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-blue-600 mt-6"
-                  />
-                  <div className="flex justify-between text-[10px] font-write text-slate-400 mt-3 uppercase tracking-widest">
-                    <span>Vazio</span>
-                    <span className="text-blue-600 text-sm">{checklist.fuelLevel}%</span>
-                    <span>Cheio</span>
-                  </div>
-                </div>
+            <div className="space-y-8">
+              <div className="bg-slate-50 p-8 rounded-[2rem] border border-slate-100">
+                <label className="block text-[10px] font-write text-slate-400 uppercase tracking-widest mb-4">KM Atual no Painel</label>
+                <input type="number" value={checklist.km} onChange={(e) => setChecklist({ ...checklist, km: parseInt(e.target.value) || 0 })} className={`w-full p-5 rounded-3xl border-2 font-write text-slate-900 text-3xl text-center focus:ring-4 outline-none transition-all ${isKmInvalid ? 'border-red-400 bg-red-50 ring-red-100' : 'border-slate-200 bg-white focus:ring-blue-50 shadow-inner'}`} />
+                {isKmInvalid && <p className="text-[10px] mt-3 text-red-500 font-bold uppercase text-center">KM inválido: deve ser maior ou igual a {selectedVehicle?.currentKm}</p>}
               </div>
 
-              <div className="grid grid-cols-3 gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
                 {[
-                  { key: 'oilChecked', label: 'Óleo', icon: 'fa-oil-can' },
-                  { key: 'waterChecked', label: 'Água', icon: 'fa-tint' },
-                  { key: 'tiresChecked', label: 'Pneus', icon: 'fa-car' }
+                  { key: 'oilChecked', label: 'Nível Óleo', icon: 'fa-oil-can' },
+                  { key: 'waterChecked', label: 'Arrefecimento', icon: 'fa-tint' },
+                  { key: 'tiresChecked', label: 'Pneus/Calib.', icon: 'fa-car' }
                 ].map(item => {
                   const isChecked = checklist[item.key as keyof Checklist];
                   return (
-                    <button
-                      key={item.key}
-                      onClick={() => setChecklist({ ...checklist, [item.key]: !isChecked })}
-                      className={`p-5 rounded-2xl border-2 flex flex-col items-center justify-center gap-3 transition-all ${
-                        isChecked ? 'bg-emerald-50 border-emerald-500 text-emerald-600' : 'bg-slate-50 border-slate-100 text-slate-300'
-                      }`}
-                    >
-                      <i className={`fas ${item.icon} text-xl`}></i>
-                      <span className="font-write text-[10px] uppercase">{item.label}</span>
+                    <button key={item.key} onClick={() => setChecklist({ ...checklist, [item.key]: !isChecked })} className={`p-8 rounded-[2rem] border-2 flex flex-col items-center justify-center gap-4 transition-all ${isChecked ? 'bg-emerald-50 border-emerald-500 text-emerald-600 shadow-xl shadow-emerald-100' : 'bg-white border-slate-100 text-slate-300 hover:border-slate-200'}`}>
+                      <i className={`fas ${item.icon} text-2xl`}></i>
+                      <span className="font-write text-[10px] uppercase tracking-widest">{item.label}</span>
                     </button>
                   );
                 })}
               </div>
             </div>
 
-            <div className="mt-10 flex justify-between">
-              <button 
-                onClick={() => scheduledTripId ? onComplete?.() : setStep(1)} 
-                className="px-6 py-3 text-slate-400 font-write uppercase text-[10px] tracking-widest hover:bg-slate-50 rounded-xl transition-all"
-              >
-                {scheduledTripId ? 'Cancelar' : 'Voltar'}
-              </button>
-              <button
-                disabled={!isChecklistValid}
-                onClick={() => setStep(3)}
-                className="bg-blue-600 text-white px-8 py-4 rounded-2xl font-write uppercase text-xs tracking-widest shadow-xl shadow-blue-100 disabled:opacity-30 transition-all flex items-center gap-2"
-              >
-                Próximo Passo <i className="fas fa-arrow-right"></i>
-              </button>
+            <div className="mt-12 flex justify-between pt-8 border-t border-slate-50">
+              <button onClick={() => setStep(2)} className="px-8 py-4 text-slate-400 font-write uppercase text-[10px] tracking-widest">Trocar Veículo</button>
+              <button disabled={!isChecklistValid} onClick={() => setStep(4)} className="bg-slate-900 text-white px-12 py-5 rounded-2xl font-write uppercase text-xs tracking-widest shadow-xl disabled:opacity-20 transition-all">Revisar e Iniciar</button>
             </div>
           </div>
         )}
 
-        {step === 3 && (
-          <div className="p-8">
-            <h3 className="text-xl font-bold text-slate-800 mb-8">Confirmar Rota de Navegação</h3>
-            
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-10">
-              <div className="space-y-6">
-                <div>
-                  <label className="block text-xs font-write text-slate-400 uppercase tracking-widest mb-2">Endereço de Partida</label>
-                  <input
-                    placeholder="Ex: Av. Paulista, 1000, São Paulo - SP"
-                    value={route.origin}
-                    onChange={(e) => setRoute({ ...route, origin: e.target.value })}
-                    className="w-full p-4 bg-white rounded-2xl border border-slate-200 focus:ring-2 focus:ring-blue-500 outline-none font-bold text-slate-800"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-xs font-write text-slate-400 uppercase tracking-widest mb-2">Endereço do Destino</label>
-                  <input
-                    placeholder="Ex: Rua das Flores, 50, Campinas - SP"
-                    value={route.destination}
-                    onChange={(e) => setRoute({ ...route, destination: e.target.value })}
-                    className="w-full p-4 bg-white rounded-2xl border border-slate-200 focus:ring-2 focus:ring-blue-500 outline-none font-bold text-slate-800"
-                  />
-                </div>
-
-                <div className="pt-2">
-                  <button 
-                    type="button"
-                    onClick={handlePreviewMap}
-                    className="w-full py-4 border-2 border-dashed border-indigo-200 text-indigo-600 rounded-2xl font-write text-[10px] uppercase tracking-widest hover:bg-indigo-50 transition-all flex items-center justify-center gap-2"
-                  >
-                    <i className="fas fa-map-location-dot text-lg"></i>
-                    Testar Rota no Google Maps
-                  </button>
-                  <p className="text-[9px] text-slate-400 text-center mt-2 font-bold uppercase">A rota acima será salva permanentemente nesta viagem</p>
-                </div>
-
-                {/* Waypoints review in Wizard */}
-                {route.waypoints.length > 0 && (
-                  <div>
-                    <label className="block text-xs font-write text-slate-400 uppercase tracking-widest mb-2">Paradas Confirmadas ({route.waypoints.length})</label>
-                    <div className="space-y-2">
-                      {route.waypoints.map((wp, i) => (
-                        <div key={i} className="p-3 bg-slate-50 rounded-xl border border-slate-100 text-xs font-bold text-slate-600 flex items-center gap-3">
-                          <span className="w-5 h-5 bg-white rounded-full flex items-center justify-center text-[10px] border border-slate-200">{i+1}</span>
-                          {wp}
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-
-                <div className="grid grid-cols-2 gap-3">
-                  <input
-                    placeholder="Cidade"
-                    value={route.city}
-                    onChange={(e) => setRoute({ ...route, city: e.target.value })}
-                    className="w-full p-4 bg-white rounded-xl border border-slate-200 focus:ring-2 focus:ring-blue-500 outline-none font-bold text-slate-800"
-                  />
-                  <input
-                    placeholder="UF"
-                    maxLength={2}
-                    value={route.state}
-                    onChange={(e) => setRoute({ ...route, state: e.target.value.toUpperCase() })}
-                    className="w-full p-4 bg-white rounded-xl border border-slate-200 text-center focus:ring-2 focus:ring-blue-500 outline-none font-write text-slate-800"
-                  />
-                </div>
-              </div>
-              
-              <div className="bg-slate-50 rounded-3xl p-6 flex flex-col items-center justify-center border border-dashed border-slate-200">
-                <i className="fas fa-route text-4xl text-slate-200 mb-4"></i>
-                <p className="text-center text-xs text-slate-400 font-medium">Os endereços de partida e destino são fundamentais para o monitoramento e segurança da jornada.</p>
-              </div>
+        {step === 4 && (
+          <div className="p-10 space-y-8 animate-in zoom-in-95 duration-500">
+            <div className="text-center space-y-4">
+              <div className="w-20 h-20 bg-emerald-100 text-emerald-600 rounded-[2rem] flex items-center justify-center text-3xl mx-auto shadow-inner"><i className="fas fa-check-double"></i></div>
+              <h3 className="text-2xl font-bold text-slate-800">Tudo Pronto para Partir?</h3>
+              <p className="text-xs text-slate-400 font-medium uppercase tracking-widest">Ao clicar em iniciar, abriremos o seu GPS automaticamente</p>
             </div>
 
-            <div className="mt-12 flex justify-between border-t border-slate-50 pt-8">
-              <button onClick={() => setStep(2)} className="px-6 py-3 text-slate-400 font-write uppercase text-[10px] tracking-widest hover:bg-slate-50 rounded-xl transition-all">Voltar</button>
-              <button
-                onClick={handleStartTrip}
-                disabled={!route.origin || !route.destination || !route.city}
-                className="bg-emerald-600 text-white px-10 py-4 rounded-2xl font-write uppercase text-xs tracking-widest shadow-xl shadow-emerald-100 hover:bg-emerald-700 transition-all flex items-center gap-3 disabled:opacity-30"
-              >
-                Confirmar Saída <i className="fas fa-check-double"></i>
-              </button>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+               <div className="bg-slate-50 p-6 rounded-3xl border border-slate-100 space-y-3">
+                  <span className="text-[9px] font-write text-slate-400 uppercase tracking-widest">Veículo</span>
+                  <div className="flex items-center gap-3"><span className="bg-slate-900 text-white px-3 py-1 rounded-lg font-mono text-xs">{selectedVehicle?.plate}</span><span className="font-bold text-slate-700">{selectedVehicle?.model}</span></div>
+               </div>
+               <div className="bg-slate-50 p-6 rounded-3xl border border-slate-100 space-y-3">
+                  <span className="text-[9px] font-write text-slate-400 uppercase tracking-widest">Destino</span>
+                  <p className="font-bold text-slate-700 uppercase">{route.city} / {route.state}</p>
+               </div>
+            </div>
+
+            <div className="pt-10 flex flex-col md:flex-row gap-4">
+              <button onClick={() => setStep(3)} className="flex-1 py-5 text-slate-400 font-write uppercase text-[10px] tracking-widest border border-slate-100 rounded-2xl">Voltar Checklist</button>
+              <button onClick={handleStartTrip} className="flex-[2] bg-emerald-600 text-white py-6 rounded-3xl font-write uppercase text-sm tracking-[0.3em] shadow-2xl shadow-emerald-100 hover:bg-emerald-700 hover:scale-[1.02] active:scale-95 transition-all flex items-center justify-center gap-4"><i className="fas fa-play"></i> INICIAR VIAGEM AGORA</button>
             </div>
           </div>
         )}

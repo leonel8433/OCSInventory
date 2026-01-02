@@ -61,9 +61,12 @@ export interface Driver {
   id: string;
   name: string;
   license: string;
+  category: string; // Categoria CNH: A, B, C, D, E, AB...
+  email?: string;
+  phone?: string;
   username: string;
   password?: string;
-  passwordChanged?: boolean; // Indica se o usuário já alterou a senha padrão
+  passwordChanged?: boolean; 
   activeVehicleId?: string;
   avatar?: string;
 }
@@ -95,8 +98,8 @@ export interface Trip {
   plannedArrival?: string;
   startTime: string;
   endTime?: string;
-  startKm: number; // KM no momento da saída
-  distance?: number; // Calculado no final
+  startKm: number; 
+  distance?: number; 
   observations?: string;
   fuelExpense?: number;
   otherExpense?: number;

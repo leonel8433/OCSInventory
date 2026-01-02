@@ -53,9 +53,9 @@ export const FleetProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   const [drivers, setDrivers] = useState<Driver[]>(() => {
     const saved = localStorage.getItem('fleet_drivers');
     return saved ? JSON.parse(saved) : [
-      { id: 'd1', name: 'João Silva', license: '12345678', username: 'joao', password: '123', passwordChanged: false },
-      { id: 'd2', name: 'Maria Santos', license: '87654321', username: 'maria', password: '123', passwordChanged: false },
-      { id: 'admin', name: 'Gestor de Frota', license: '0000', username: 'admin', password: 'admin', passwordChanged: true },
+      { id: 'd1', name: 'João Silva', license: '12345678', category: 'D', email: 'joao@frota.com', phone: '(11) 98888-7777', username: 'joao', password: '123', passwordChanged: false },
+      { id: 'd2', name: 'Maria Santos', license: '87654321', category: 'B', email: 'maria@frota.com', phone: '(11) 97777-6666', username: 'maria', password: '123', passwordChanged: false },
+      { id: 'admin', name: 'Gestor de Frota', license: '0000', category: 'AB', email: 'admin@frota.com', phone: '(11) 90000-0000', username: 'admin', password: 'admin', passwordChanged: true },
     ];
   });
 
@@ -149,6 +149,22 @@ export const FleetProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 
   const addVehicle = (v: Vehicle) => setVehicles(prev => [...prev, v]);
   const updateVehicle = (id: string, updates: Partial<Vehicle>) => setVehicles(prev => prev.map(v => v.id === id ? { ...v, ...updates } : v));
+  
+  const updateDriver = (id: string, updates: Partial<Driver>) => {
+    setDrivers(prev => {
+      const updatedList = prev.map(d => d.id === id ? { ...d, ...updates } : d);
+      // Se o usuário editado for o usuário logado, atualiza o currentUser também
+      if (currentUser && id === currentUser.id) {
+        const updatedUser = updatedList.find(d => d.id === id) || null;
+        if (updatedUser) {
+          setCurrentUser(updatedUser);
+          sessionStorage.setItem('fleet_current_user', JSON.stringify(updatedUser));
+        }
+      }
+      return updatedList;
+    });
+  };
+
   const startTrip = (trip: Trip, checklist: Checklist) => {
     setActiveTrips(prev => [...prev, trip]);
     setChecklists(prev => [...prev, checklist]);
@@ -191,7 +207,6 @@ export const FleetProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     });
   }, []);
   const addDriver = (d: Driver) => setDrivers(prev => [...prev, { ...d, passwordChanged: d.passwordChanged ?? false }]);
-  const updateDriver = (id: string, updates: Partial<Driver>) => setDrivers(prev => prev.map(d => d.id === id ? { ...d, ...updates } : d));
   const deleteDriver = (id: string) => setDrivers(prev => prev.filter(d => d.id !== id));
   const updateTrip = (tripId: string, updates: Partial<Trip>) => setActiveTrips(prev => prev.map(t => t.id === tripId ? { ...t, ...updates } : t));
   const addScheduledTrip = (trip: ScheduledTrip) => setScheduledTrips(prev => [trip, ...prev]);

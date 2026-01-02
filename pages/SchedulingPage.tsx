@@ -1,13 +1,12 @@
 
 import React, { useState, useMemo } from 'react';
 import { useFleet } from '../context/FleetContext';
-import { ScheduledTrip, Vehicle } from '../types';
-import { checkSPRodizio, getRodizioDayLabel } from '../utils/trafficRules';
+import { ScheduledTrip } from '../types';
+import { checkSPRodizio } from '../utils/trafficRules';
 
 const SchedulingPage: React.FC = () => {
   const { drivers, vehicles, scheduledTrips, addScheduledTrip, updateScheduledTrip, deleteScheduledTrip, currentUser } = useFleet();
   const [showForm, setShowForm] = useState(false);
-  const [loadingLocation, setLoadingLocation] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   
   const [newSchedule, setNewSchedule] = useState({
@@ -29,15 +28,6 @@ const SchedulingPage: React.FC = () => {
     if (isAdmin) return scheduledTrips;
     return scheduledTrips.filter(t => t.driverId === currentUser?.id);
   }, [scheduledTrips, isAdmin, currentUser]);
-
-  const selectedVehicle = vehicles.find(v => v.id === newSchedule.vehicleId);
-  
-  const isRestricted = useMemo(() => {
-    if (!selectedVehicle || !newSchedule.scheduledDate) return false;
-    const [year, month, day] = newSchedule.scheduledDate.split('-').map(Number);
-    const dateObj = new Date(year, month - 1, day);
-    return checkSPRodizio(selectedVehicle.plate, dateObj);
-  }, [selectedVehicle, newSchedule.scheduledDate]);
 
   const handleEdit = (trip: ScheduledTrip) => {
     setNewSchedule({
@@ -69,26 +59,6 @@ const SchedulingPage: React.FC = () => {
 
   const handleRemoveWaypoint = (index: number) => {
     setNewSchedule(prev => ({ ...prev, waypoints: prev.waypoints.filter((_, i) => i !== index) }));
-  };
-
-  const handleGetCurrentLocation = () => {
-    setLoadingLocation(true);
-    if ("geolocation" in navigator) {
-      navigator.geolocation.getCurrentPosition(
-        (position) => {
-          const { latitude, longitude } = position.coords;
-          setNewSchedule(prev => ({ ...prev, origin: `${latitude},${longitude}` }));
-          setLoadingLocation(false);
-        },
-        (error) => {
-          alert("Não foi possível obter sua localização atual.");
-          setLoadingLocation(false);
-        }
-      );
-    } else {
-      alert("Geolocalização não suportada.");
-      setLoadingLocation(false);
-    }
   };
 
   const handleAddSchedule = (e: React.FormEvent) => {
@@ -140,159 +110,74 @@ const SchedulingPage: React.FC = () => {
       <div className="flex items-center justify-between">
         <div>
           <h2 className="text-2xl font-bold text-slate-800">Agenda de Viagens</h2>
-          {!isAdmin && <p className="text-xs text-slate-400 font-bold uppercase tracking-widest mt-1">Meus compromissos agendados</p>}
+          {!isAdmin && <p className="text-xs text-slate-400 font-bold uppercase tracking-widest mt-1">Seus Próximos Compromissos</p>}
         </div>
         {isAdmin && (
           <button 
-            onClick={() => {
-              setShowForm(!showForm);
-              if (showForm) setEditingId(null);
-            }}
-            className="bg-indigo-600 text-white px-4 py-2 rounded-lg font-bold hover:bg-indigo-700 flex items-center gap-2 shadow-lg shadow-indigo-200 transition-all"
+            onClick={() => { setShowForm(!showForm); if (showForm) setEditingId(null); }}
+            className="bg-indigo-600 text-white px-4 py-2.5 rounded-xl font-bold hover:bg-indigo-700 flex items-center gap-2 shadow-lg shadow-indigo-100 transition-all"
           >
             <i className={`fas ${showForm ? 'fa-times' : 'fa-calendar-plus'}`}></i>
-            {showForm ? 'Cancelar' : 'Agendar Viagem'}
+            {showForm ? 'Cancelar' : 'Nova Agenda'}
           </button>
         )}
       </div>
 
       {isAdmin && showForm && (
-        <div className="bg-white p-6 rounded-2xl shadow-xl border border-slate-100 animate-in fade-in slide-in-from-top-4 duration-300">
-          <h3 className="text-sm font-write text-slate-800 uppercase tracking-widest mb-6">
-            {editingId ? 'Alterar Detalhes da Viagem' : 'Novo Agendamento'}
-          </h3>
+        <div className="bg-white p-8 rounded-3xl shadow-xl border border-slate-100 animate-in fade-in slide-in-from-top-4 duration-300">
+          <h3 className="text-sm font-write text-slate-800 uppercase tracking-widest mb-6">Criar Agendamento</h3>
           <form onSubmit={handleAddSchedule} className="space-y-6">
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
               <div>
-                <label className="block text-xs font-bold text-slate-500 uppercase mb-2">Motorista</label>
-                <select
-                  required
-                  value={newSchedule.driverId}
-                  onChange={(e) => setNewSchedule({ ...newSchedule, driverId: e.target.value })}
-                  className="w-full p-3 bg-white border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none text-sm font-bold text-slate-950"
-                >
+                <label className="block text-[10px] font-write text-slate-500 uppercase mb-2">Condutor</label>
+                <select required value={newSchedule.driverId} onChange={(e) => setNewSchedule({ ...newSchedule, driverId: e.target.value })} className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl focus:ring-2 focus:ring-indigo-500 outline-none font-bold text-slate-950">
                   <option value="">Selecione...</option>
-                  {drivers.map(d => (
-                    <option key={d.id} value={d.id}>{d.name}</option>
-                  ))}
+                  {drivers.map(d => (<option key={d.id} value={d.id}>{d.name}</option>))}
                 </select>
               </div>
               <div>
-                <label className="block text-xs font-bold text-slate-500 uppercase mb-2">Veículo</label>
-                <select
-                  required
-                  value={newSchedule.vehicleId}
-                  onChange={(e) => setNewSchedule({ ...newSchedule, vehicleId: e.target.value })}
-                  className={`w-full p-3 bg-white border rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none text-sm font-bold text-slate-950 transition-all ${isRestricted ? 'border-amber-400' : 'border-slate-200'}`}
-                >
+                <label className="block text-[10px] font-write text-slate-500 uppercase mb-2">Veículo</label>
+                <select required value={newSchedule.vehicleId} onChange={(e) => setNewSchedule({ ...newSchedule, vehicleId: e.target.value })} className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl focus:ring-2 focus:ring-indigo-500 outline-none font-bold text-slate-950">
                   <option value="">Selecione...</option>
-                  {vehicles.map(v => (
-                    <option key={v.id} value={v.id}>{v.plate} - {v.model}</option>
-                  ))}
+                  {vehicles.map(v => (<option key={v.id} value={v.id}>{v.plate} - {v.model}</option>))}
                 </select>
               </div>
               <div>
-                <label className="block text-xs font-bold text-slate-500 uppercase mb-2">Data</label>
-                <input
-                  required
-                  type="date"
-                  value={newSchedule.scheduledDate}
-                  onChange={(e) => setNewSchedule({ ...newSchedule, scheduledDate: e.target.value })}
-                  className={`w-full p-3 bg-white border rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none text-sm font-bold text-slate-950 transition-all ${isRestricted ? 'border-amber-400' : 'border-slate-200'}`}
-                />
+                <label className="block text-[10px] font-write text-slate-500 uppercase mb-2">Data Prevista</label>
+                <input required type="date" value={newSchedule.scheduledDate} onChange={(e) => setNewSchedule({ ...newSchedule, scheduledDate: e.target.value })} className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl focus:ring-2 focus:ring-indigo-500 outline-none font-bold text-slate-950" />
               </div>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div>
-                <label className="block text-xs font-bold text-slate-500 uppercase mb-2">Origem</label>
-                <div className="flex gap-2">
-                  <input
-                    placeholder="Local de saída"
-                    value={newSchedule.origin}
-                    onChange={(e) => setNewSchedule({ ...newSchedule, origin: e.target.value })}
-                    className="flex-1 p-3 bg-white border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none text-sm font-bold text-slate-950"
-                  />
-                  <button type="button" onClick={handleGetCurrentLocation} className="w-11 h-11 bg-indigo-50 text-indigo-600 rounded-xl flex items-center justify-center">
-                    <i className="fas fa-location-crosshairs"></i>
-                  </button>
-                </div>
+                <label className="block text-[10px] font-write text-slate-500 uppercase mb-2">Origem</label>
+                <input placeholder="Ponto de partida" value={newSchedule.origin} onChange={(e) => setNewSchedule({ ...newSchedule, origin: e.target.value })} className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl focus:ring-2 focus:ring-indigo-500 outline-none font-bold text-slate-950" />
               </div>
-
               <div>
-                <label className="block text-xs font-bold text-slate-500 uppercase mb-2">Destino Final</label>
-                <input
-                  required
-                  placeholder="Local de chegada"
-                  value={newSchedule.destination}
-                  onChange={(e) => setNewSchedule({ ...newSchedule, destination: e.target.value })}
-                  className="w-full p-3 bg-white border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none text-sm font-bold text-slate-950"
-                />
+                <label className="block text-[10px] font-write text-slate-500 uppercase mb-2">Destino Final</label>
+                <input required placeholder="Local de chegada" value={newSchedule.destination} onChange={(e) => setNewSchedule({ ...newSchedule, destination: e.target.value })} className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl focus:ring-2 focus:ring-indigo-500 outline-none font-bold text-slate-950" />
               </div>
             </div>
 
-            {/* Waypoints Section */}
             <div className="space-y-4">
               <div className="flex items-center justify-between">
-                <label className="block text-xs font-bold text-slate-500 uppercase">Paradas Intermediárias</label>
-                <button 
-                  type="button" 
-                  onClick={handleAddWaypoint}
-                  className="text-[10px] font-write text-indigo-600 uppercase tracking-widest flex items-center gap-1 hover:text-indigo-800"
-                >
-                  <i className="fas fa-plus-circle"></i> Adicionar Parada
-                </button>
+                <label className="block text-[10px] font-write text-slate-500 uppercase tracking-widest">Paradas Intermediárias</label>
+                <button type="button" onClick={handleAddWaypoint} className="text-[10px] font-write text-indigo-600 uppercase tracking-widest hover:underline">+ Adicionar Ponto</button>
               </div>
               <div className="grid grid-cols-1 gap-3">
                 {newSchedule.waypoints.map((wp, idx) => (
-                  <div key={idx} className="flex gap-2 animate-in slide-in-from-left-2 duration-200">
-                    <div className="flex items-center justify-center w-8 text-slate-300 font-bold">{idx + 1}</div>
-                    <input
-                      placeholder={`Endereço da parada ${idx + 1}`}
-                      value={wp}
-                      onChange={(e) => handleUpdateWaypoint(idx, e.target.value)}
-                      className="flex-1 p-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none text-sm font-bold text-slate-950"
-                    />
-                    <button 
-                      type="button" 
-                      onClick={() => handleRemoveWaypoint(idx)}
-                      className="w-11 h-11 text-red-300 hover:text-red-500 transition-colors"
-                    >
-                      <i className="fas fa-trash-alt"></i>
-                    </button>
+                  <div key={idx} className="flex gap-2">
+                    <input placeholder={`Parada ${idx + 1}`} value={wp} onChange={(e) => handleUpdateWaypoint(idx, e.target.value)} className="flex-1 p-3 bg-white border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none font-bold text-slate-950" />
+                    <button type="button" onClick={() => handleRemoveWaypoint(idx)} className="w-10 h-10 text-red-300 hover:text-red-500 transition-colors"><i className="fas fa-trash-alt"></i></button>
                   </div>
                 ))}
               </div>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-              <input
-                placeholder="Cidade"
-                value={newSchedule.city}
-                onChange={(e) => setNewSchedule({ ...newSchedule, city: e.target.value })}
-                className="w-full p-3 bg-white border border-slate-200 rounded-xl text-sm font-bold"
-              />
-              <input
-                placeholder="UF"
-                maxLength={2}
-                value={newSchedule.state}
-                onChange={(e) => setNewSchedule({ ...newSchedule, state: e.target.value.toUpperCase() })}
-                className="w-full p-3 bg-white border border-slate-200 rounded-xl text-sm font-bold"
-              />
-              <input
-                placeholder="CEP"
-                value={newSchedule.zipCode}
-                onChange={(e) => setNewSchedule({ ...newSchedule, zipCode: e.target.value })}
-                className="w-full p-3 bg-white border border-slate-200 rounded-xl text-sm font-bold"
-              />
-            </div>
-
-            <div className="flex justify-end gap-3">
-              {editingId && (
-                <button type="button" onClick={() => { setShowForm(false); setEditingId(null); }} className="px-6 py-3 font-bold text-slate-400 uppercase text-xs">Cancelar</button>
-              )}
-              <button type="submit" className="bg-indigo-600 text-white px-10 py-3 rounded-xl font-bold hover:bg-indigo-700 shadow-lg transition-all">
-                {editingId ? 'Salvar Alterações' : 'Agendar Viagem'}
+            <div className="flex justify-end gap-3 pt-6">
+              <button type="button" onClick={() => { setShowForm(false); setEditingId(null); }} className="px-6 py-3 font-write text-slate-400 uppercase text-[10px] tracking-widest">Cancelar</button>
+              <button type="submit" className="bg-indigo-600 text-white px-10 py-4 rounded-2xl font-write uppercase text-[10px] tracking-widest shadow-xl shadow-indigo-100 hover:bg-indigo-700 transition-all">
+                {editingId ? 'Salvar Alterações' : 'Confirmar Agendamento'}
               </button>
             </div>
           </form>
@@ -308,55 +193,47 @@ const SchedulingPage: React.FC = () => {
             const restricted = vehicle && checkSPRodizio(vehicle.plate, tripDate);
 
             return (
-              <div key={trip.id} className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 flex flex-col md:flex-row items-center gap-6 hover:shadow-md transition-all relative overflow-hidden">
-                {restricted && <div className="absolute top-0 left-0 w-1 h-full bg-amber-500"></div>}
-                
-                <div className="w-full md:w-32 flex flex-col items-center justify-center p-3 bg-slate-50 rounded-2xl border border-slate-100 shrink-0">
+              <div key={trip.id} className="bg-white p-6 rounded-3xl shadow-sm border border-slate-100 flex flex-col md:flex-row items-center gap-6 hover:shadow-md transition-all relative overflow-hidden group">
+                <div className="w-full md:w-32 flex flex-col items-center justify-center p-4 bg-slate-50 rounded-2xl border border-slate-100 shrink-0">
                   <span className="text-2xl font-write text-slate-800">{tripDate.getDate()}</span>
-                  <span className="text-[10px] font-bold text-slate-400 uppercase">{tripDate.toLocaleDateString('pt-BR', { month: 'short' })}</span>
+                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">{tripDate.toLocaleDateString('pt-BR', { month: 'short' })}</span>
                 </div>
 
                 <div className="flex-1 grid grid-cols-1 md:grid-cols-4 gap-4 w-full">
                   <div>
-                    <p className="text-[10px] font-bold text-slate-400 uppercase">Motorista</p>
+                    <p className="text-[9px] font-write text-slate-400 uppercase tracking-widest mb-1">Motorista</p>
                     <p className="font-bold text-slate-800">{driver?.name}</p>
                   </div>
                   <div>
-                    <p className="text-[10px] font-bold text-slate-400 uppercase">Veículo</p>
+                    <p className="text-[9px] font-write text-slate-400 uppercase tracking-widest mb-1">Veículo</p>
                     <p className="font-bold text-indigo-600">{vehicle?.plate} {restricted && '⚠️'}</p>
                   </div>
                   <div className="md:col-span-2">
-                    <p className="text-[10px] font-bold text-slate-400 uppercase">Rota</p>
+                    <p className="text-[9px] font-write text-slate-400 uppercase tracking-widest mb-1">Destino</p>
                     <p className="font-bold text-slate-800 truncate">{trip.destination}</p>
-                    {trip.waypoints && trip.waypoints.length > 0 && (
-                      <p className="text-[9px] text-indigo-500 font-bold uppercase mt-1">
-                        <i className="fas fa-map-signs mr-1"></i> {trip.waypoints.length} Parada(s) intermediária(s)
-                      </p>
-                    )}
                   </div>
                 </div>
 
-                <div className="flex gap-2">
-                  <button
-                    onClick={() => {
-                      const origin = trip.origin ? encodeURIComponent(trip.origin) : '';
-                      const dest = encodeURIComponent(`${trip.destination}, ${trip.city}`);
-                      const wp = trip.waypoints && trip.waypoints.length > 0 
-                        ? `&waypoints=${trip.waypoints.map(w => encodeURIComponent(w)).join('|')}` 
-                        : '';
-                      window.open(`https://www.google.com/maps/dir/?api=1&origin=${origin}&destination=${dest}${wp}&travelmode=driving`, '_blank');
-                    }}
-                    className="w-10 h-10 bg-slate-50 text-indigo-600 rounded-xl flex items-center justify-center hover:bg-indigo-50 border border-indigo-100 transition-all"
-                    title="Ver Rota"
-                  >
-                    <i className="fas fa-route"></i>
-                  </button>
+                <div className="flex gap-2 shrink-0">
+                  {/* Botão de Iniciar para o motorista */}
+                  {!isAdmin && (
+                    <button
+                      onClick={() => {
+                        // Navegação para a aba de operação passando o ID do agendamento
+                        // Isso simula o clique no dashboard
+                        window.dispatchEvent(new CustomEvent('start-schedule', { detail: trip.id }));
+                      }}
+                      className="bg-indigo-600 text-white px-6 py-3 rounded-xl font-write uppercase text-[10px] tracking-widest hover:bg-indigo-700 transition-all flex items-center gap-2 shadow-lg shadow-indigo-100"
+                    >
+                      <i className="fas fa-play"></i> Iniciar
+                    </button>
+                  )}
                   {isAdmin && (
                     <>
-                      <button onClick={() => handleEdit(trip)} className="w-10 h-10 bg-slate-50 text-slate-400 rounded-xl flex items-center justify-center hover:text-blue-600 hover:bg-blue-50">
+                      <button onClick={() => handleEdit(trip)} className="w-11 h-11 bg-slate-50 text-slate-400 rounded-xl flex items-center justify-center hover:text-blue-600 hover:bg-blue-50 transition-all">
                         <i className="fas fa-edit"></i>
                       </button>
-                      <button onClick={() => deleteScheduledTrip(trip.id)} className="w-10 h-10 rounded-xl bg-red-50 text-red-600 flex items-center justify-center hover:bg-red-100">
+                      <button onClick={() => deleteScheduledTrip(trip.id)} className="w-11 h-11 rounded-xl bg-red-50 text-red-600 flex items-center justify-center hover:bg-red-100 transition-all">
                         <i className="fas fa-trash-alt"></i>
                       </button>
                     </>
@@ -366,8 +243,9 @@ const SchedulingPage: React.FC = () => {
             );
           })
         ) : (
-          <div className="py-12 text-center bg-white rounded-3xl border-2 border-dashed border-slate-100">
-            <p className="text-slate-400 font-medium italic">Nenhum agendamento encontrado.</p>
+          <div className="py-20 text-center bg-white rounded-3xl border border-dashed border-slate-200">
+             <i className="fas fa-calendar-xmark text-4xl text-slate-100 mb-4"></i>
+            <p className="text-slate-400 font-medium italic">Nenhum agendamento para o período.</p>
           </div>
         )}
       </div>
