@@ -32,7 +32,10 @@ const DriverManagement: React.FC = () => {
 
   const handleFineSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newFine.driverId || !newFine.vehicleId || !newFine.value) return;
+    if (!newFine.driverId || !newFine.vehicleId || !newFine.value) {
+      alert("Por favor, selecione o motorista, o veículo e o valor da multa.");
+      return;
+    }
 
     const fine: Fine = {
       id: Math.random().toString(36).substr(2, 9),
@@ -65,10 +68,9 @@ const DriverManagement: React.FC = () => {
         avatar: newDriver.avatar
       };
 
-      // Só atualiza a senha se o campo for preenchido
       if (newDriver.password.trim() !== '') {
         updates.password = newDriver.password;
-        updates.passwordChanged = false; // Força nova alteração se o admin resetar
+        updates.passwordChanged = false;
       }
 
       updateDriver(editingDriverId, updates);
@@ -90,9 +92,8 @@ const DriverManagement: React.FC = () => {
       alert('Motorista cadastrado com sucesso!');
     }
 
-    setNewDriver({ name: '', license: '', category: 'B', email: '', phone: '', username: '', password: '', avatar: '' });
+    resetFormState();
     setShowDriverForm(false);
-    setEditingDriverId(null);
   };
 
   const handleEditDriver = (driver: Driver) => {
@@ -103,16 +104,13 @@ const DriverManagement: React.FC = () => {
       email: driver.email || '',
       phone: driver.phone || '',
       username: driver.username,
-      password: '', // Senha em branco por segurança
+      password: '',
       avatar: driver.avatar || ''
     });
     setEditingDriverId(driver.id);
     setShowDriverForm(true);
     setShowFineForm(false);
-    
-    setTimeout(() => {
-      window.scrollTo({ top: 0, behavior: 'smooth' });
-    }, 50);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
   const handleAvatarChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -128,11 +126,8 @@ const DriverManagement: React.FC = () => {
 
   const resetFormState = () => {
     setNewDriver({ name: '', license: '', category: 'B', email: '', phone: '', username: '', password: '', avatar: '' });
-    setEditingId(null);
+    setEditingDriverId(null);
   };
-
-  // Alias para evitar conflito com o estado resetFormState do usuário
-  const setEditingId = (id: string | null) => setEditingDriverId(id);
 
   return (
     <div className="space-y-8 pb-20">
@@ -144,7 +139,7 @@ const DriverManagement: React.FC = () => {
         <div className="flex flex-wrap gap-2">
           <button 
             onClick={() => { setShowFineForm(!showFineForm); setShowDriverForm(false); setEditingDriverId(null); }}
-            className="bg-slate-800 text-white px-4 py-2.5 rounded-xl font-bold hover:bg-slate-700 flex items-center gap-2 transition-all"
+            className={`px-4 py-2.5 rounded-xl font-bold flex items-center gap-2 transition-all shadow-lg ${showFineForm ? 'bg-slate-900 text-white' : 'bg-white text-slate-700 border border-slate-200'}`}
           >
             <i className={`fas ${showFineForm ? 'fa-times' : 'fa-gavel'}`}></i>
             {showFineForm ? 'Cancelar' : 'Registrar Multa'}
@@ -167,6 +162,111 @@ const DriverManagement: React.FC = () => {
           </button>
         </div>
       </div>
+
+      {/* FORMULÁRIO DE MULTAS (CORREÇÃO: AGORA VISÍVEL) */}
+      {showFineForm && (
+        <div className="bg-white p-8 rounded-3xl shadow-xl border border-red-100 animate-in fade-in slide-in-from-top-4 duration-300">
+          <div className="flex items-center gap-3 mb-8">
+            <div className="w-10 h-10 bg-red-100 text-red-600 rounded-xl flex items-center justify-center">
+              <i className="fas fa-gavel"></i>
+            </div>
+            <div>
+              <h3 className="text-sm font-write text-slate-800 uppercase tracking-widest">Registrar Nova Infração</h3>
+              <p className="text-[10px] text-slate-400 font-bold uppercase">Associe a multa ao condutor e ao veículo correspondente</p>
+            </div>
+          </div>
+          
+          <form onSubmit={handleFineSubmit} className="space-y-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+              <div className="lg:col-span-2">
+                <label className="block text-[10px] font-write text-slate-400 uppercase mb-2">Motorista Infrator</label>
+                <select 
+                  required 
+                  value={newFine.driverId} 
+                  onChange={(e) => setNewFine({ ...newFine, driverId: e.target.value })}
+                  className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl focus:ring-2 focus:ring-red-500 outline-none font-bold text-slate-900"
+                >
+                  <option value="">Selecione o motorista...</option>
+                  {drivers.filter(d => d.username !== 'admin').map(d => (
+                    <option key={d.id} value={d.id}>{d.name} (@{d.username})</option>
+                  ))}
+                </select>
+              </div>
+              
+              <div className="lg:col-span-2">
+                <label className="block text-[10px] font-write text-slate-400 uppercase mb-2">Veículo da Infração</label>
+                <select 
+                  required 
+                  value={newFine.vehicleId} 
+                  onChange={(e) => setNewFine({ ...newFine, vehicleId: e.target.value })}
+                  className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl focus:ring-2 focus:ring-red-500 outline-none font-bold text-slate-900"
+                >
+                  <option value="">Selecione o veículo...</option>
+                  {vehicles.map(v => (
+                    <option key={v.id} value={v.id}>{v.plate} - {v.model}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-[10px] font-write text-slate-400 uppercase mb-2">Data da Multa</label>
+                <input 
+                  type="date" 
+                  required 
+                  value={newFine.date} 
+                  onChange={(e) => setNewFine({ ...newFine, date: e.target.value })}
+                  className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl focus:ring-2 focus:ring-red-500 outline-none font-bold text-slate-900" 
+                />
+              </div>
+
+              <div>
+                <label className="block text-[10px] font-write text-slate-400 uppercase mb-2">Valor (R$)</label>
+                <input 
+                  type="number" 
+                  step="0.01" 
+                  required 
+                  placeholder="0,00" 
+                  value={newFine.value} 
+                  onChange={(e) => setNewFine({ ...newFine, value: e.target.value })}
+                  className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl focus:ring-2 focus:ring-red-500 outline-none font-bold text-slate-900" 
+                />
+              </div>
+
+              <div>
+                <label className="block text-[10px] font-write text-slate-400 uppercase mb-2">Pontuação (CNH)</label>
+                <input 
+                  type="number" 
+                  required 
+                  placeholder="Ex: 7" 
+                  value={newFine.points} 
+                  onChange={(e) => setNewFine({ ...newFine, points: e.target.value })}
+                  className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl focus:ring-2 focus:ring-red-500 outline-none font-bold text-slate-900" 
+                />
+              </div>
+
+              <div className="lg:col-span-1">
+                <label className="block text-[10px] font-write text-slate-400 uppercase mb-2">&nbsp;</label>
+                <button 
+                  type="submit" 
+                  className="w-full bg-red-600 text-white p-4 rounded-2xl font-write uppercase text-[10px] tracking-widest shadow-lg shadow-red-100 hover:bg-red-700 transition-all active:scale-95"
+                >
+                  Gravar Multa
+                </button>
+              </div>
+
+              <div className="md:col-span-2 lg:col-span-4">
+                <label className="block text-[10px] font-write text-slate-400 uppercase mb-2">Descrição da Infração</label>
+                <textarea 
+                  placeholder="Ex: Excesso de velocidade na Marginal Tietê..." 
+                  value={newFine.description} 
+                  onChange={(e) => setNewFine({ ...newFine, description: e.target.value })}
+                  className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl focus:ring-2 focus:ring-red-500 outline-none font-bold text-slate-900 min-h-[100px]"
+                ></textarea>
+              </div>
+            </div>
+          </form>
+        </div>
+      )}
 
       {showDriverForm && (
         <div className="bg-white p-8 rounded-3xl shadow-xl border border-slate-100 animate-in fade-in slide-in-from-top-4 duration-300">
@@ -253,7 +353,7 @@ const DriverManagement: React.FC = () => {
         <div className="xl:col-span-8 space-y-4">
           <h3 className="text-[10px] font-write text-slate-400 uppercase tracking-[0.2em] px-2 mb-6">Corpo de Condutores ({drivers.length})</h3>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            {drivers.map(driver => {
+            {drivers.filter(d => d.username !== 'admin').map(driver => {
               const driverFines = fines.filter(f => f.driverId === driver.id);
               const totalPoints = driverFines.reduce((sum, f) => sum + f.points, 0);
               
