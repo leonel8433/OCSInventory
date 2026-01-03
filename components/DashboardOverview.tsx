@@ -15,11 +15,13 @@ const DashboardOverview: React.FC<DashboardOverviewProps> = ({ onStartSchedule, 
   const isAdmin = currentUser?.username === 'admin';
   const myActiveTrip = useMemo(() => activeTrips.find(t => t.driverId === currentUser?.id), [activeTrips, currentUser]);
   
+  // Filtro rigoroso: Apenas agendamentos onde o driverId corresponde ao ID do usuário atual
   const myScheduledTrips = useMemo(() => {
+    if (isAdmin) return []; // Admin vê a visão gerencial, não a escala pessoal
     return scheduledTrips
       .filter(t => t.driverId === currentUser?.id)
       .sort((a, b) => new Date(a.scheduledDate).getTime() - new Date(b.scheduledDate).getTime());
-  }, [scheduledTrips, currentUser]);
+  }, [scheduledTrips, currentUser, isAdmin]);
 
   useEffect(() => {
     let interval: any;
@@ -106,7 +108,7 @@ const DashboardOverview: React.FC<DashboardOverviewProps> = ({ onStartSchedule, 
                 <div className="flex items-center gap-6">
                    <div className="w-16 h-16 bg-white rounded-2xl border border-slate-100 flex flex-col items-center justify-center shrink-0">
                       <span className="text-xl font-write text-indigo-600 leading-none">{new Date(trip.scheduledDate + 'T00:00:00').getDate()}</span>
-                      <span className="text-[8px] font-bold text-slate-400 uppercase tracking-widest mt-1">Ago</span>
+                      <span className="text-[8px] font-bold text-slate-400 uppercase tracking-widest mt-1">Viagem</span>
                    </div>
                    <div className="min-w-0">
                       <div className="flex items-center gap-2 mb-1">

@@ -21,6 +21,12 @@ const SchedulingPage: React.FC = () => {
 
   const isAdmin = currentUser?.username === 'admin';
 
+  // Memoizar agendamentos visíveis com base no papel do usuário
+  const visibleScheduledTrips = useMemo(() => {
+    if (isAdmin) return scheduledTrips;
+    return scheduledTrips.filter(trip => trip.driverId === currentUser?.id);
+  }, [scheduledTrips, isAdmin, currentUser]);
+
   // Memoizar se o destino atual é São Paulo
   const isDestSaoPaulo = useMemo(() => {
     return isLocationSaoPaulo(newSchedule.city, newSchedule.state, newSchedule.destination);
@@ -96,7 +102,9 @@ const SchedulingPage: React.FC = () => {
       <div className="flex items-center justify-between">
         <div>
           <h2 className="text-2xl font-bold text-slate-800">Agenda de Viagens</h2>
-          <p className="text-xs text-slate-400 font-bold uppercase tracking-widest mt-1">Planejamento e Escala de Rotas</p>
+          <p className="text-xs text-slate-400 font-bold uppercase tracking-widest mt-1">
+            {isAdmin ? 'Planejamento e Escala de Rotas' : 'Minhas Viagens Escaladas'}
+          </p>
         </div>
         {isAdmin && (
           <button onClick={() => setShowForm(!showForm)} className="bg-indigo-600 text-white px-6 py-2.5 rounded-xl font-bold shadow-lg hover:bg-indigo-700 transition-all flex items-center gap-2">
@@ -186,7 +194,7 @@ const SchedulingPage: React.FC = () => {
       )}
 
       <div className="grid grid-cols-1 gap-4">
-        {scheduledTrips.length > 0 ? scheduledTrips.map(trip => {
+        {visibleScheduledTrips.length > 0 ? visibleScheduledTrips.map(trip => {
           const vehicle = vehicles.find(v => v.id === trip.vehicleId);
           const [y, m, d] = trip.scheduledDate.split('-').map(Number);
           const tripDate = new Date(y, m-1, d, 12, 0, 0);
@@ -203,6 +211,8 @@ const SchedulingPage: React.FC = () => {
                   <p className="text-[10px] font-bold text-slate-400 uppercase">{vehicle?.model}</p>
                 </div>
                 <h4 className="text-lg font-bold text-slate-800 truncate">{trip.destination}</h4>
+                {!isAdmin && <p className="text-[10px] text-indigo-600 font-bold uppercase tracking-widest">Viagem escalada para você</p>}
+                {isAdmin && <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">Condutor: {drivers.find(d => d.id === trip.driverId)?.name}</p>}
               </div>
               {!isAdmin && (
                 <button onClick={() => window.dispatchEvent(new CustomEvent('start-schedule', { detail: trip.id }))} className="bg-indigo-600 text-white px-8 py-4 rounded-2xl font-write uppercase text-[10px] tracking-widest shadow-lg hover:bg-indigo-700 active:scale-95 transition-all">Iniciar</button>
