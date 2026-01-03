@@ -1,6 +1,7 @@
 
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { Vehicle, Driver, Trip, Checklist, VehicleStatus, MaintenanceRecord, AppNotification, Fine, Occurrence, ScheduledTrip } from '../types';
+import { apiService } from '../services/api';
 
 interface FleetContextType {
   vehicles: Vehicle[];
@@ -8,118 +9,80 @@ interface FleetContextType {
   activeTrips: Trip[];
   completedTrips: Trip[];
   scheduledTrips: ScheduledTrip[];
-  checklists: Checklist[];
   maintenanceRecords: MaintenanceRecord[];
-  notifications: AppNotification[];
   fines: Fine[];
-  occurrences: Occurrence[];
-  addVehicle: (v: Vehicle) => void;
-  updateVehicle: (id: string, updates: Partial<Vehicle>) => void;
-  addDriver: (d: Driver) => void;
-  updateDriver: (id: string, updates: Partial<Driver>) => void;
-  deleteDriver: (id: string) => void;
-  startTrip: (trip: Trip, checklist: Checklist) => void;
-  updateTrip: (tripId: string, updates: Partial<Trip>) => void;
-  addScheduledTrip: (trip: ScheduledTrip) => void;
-  updateScheduledTrip: (id: string, updates: Partial<ScheduledTrip>) => void;
-  deleteScheduledTrip: (id: string) => void;
-  endTrip: (tripId: string, currentKm: number, endTime: string, expenses?: { fuel: number, other: number, notes: string }) => void;
-  cancelTrip: (tripId: string) => void;
-  addMaintenanceRecord: (record: MaintenanceRecord) => void;
-  resolveMaintenance: (vehicleId: string, recordId: string | null | undefined, currentKm: number, returnDate: string, finalCost?: number) => void;
-  addFine: (fine: Fine) => void;
-  deleteFine: (id: string) => void;
-  addOccurrence: (occ: Occurrence) => void;
-  markNotificationAsRead: (id: string) => void;
+  isLoading: boolean;
   currentUser: Driver | null;
-  login: (username: string, pass: string) => boolean;
+  addVehicle: (v: Vehicle) => Promise<void>;
+  updateVehicle: (id: string, updates: Partial<Vehicle>) => Promise<void>;
+  addDriver: (d: Driver) => Promise<void>;
+  updateDriver: (id: string, updates: Partial<Driver>) => Promise<void>;
+  deleteDriver: (id: string) => Promise<void>;
+  startTrip: (trip: Trip, checklist: Checklist) => Promise<void>;
+  updateTrip: (tripId: string, updates: Partial<Trip>) => Promise<void>;
+  addScheduledTrip: (trip: ScheduledTrip) => Promise<void>;
+  endTrip: (tripId: string, currentKm: number, endTime: string, expenses?: any) => Promise<void>;
+  cancelTrip: (tripId: string) => Promise<void>;
+  login: (username: string, pass: string) => Promise<boolean>;
   logout: () => void;
-  changePassword: (newPass: string) => void;
   resetDatabase: () => void;
 }
 
 const FleetContext = createContext<FleetContextType | undefined>(undefined);
 
 export const FleetProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [vehicles, setVehicles] = useState<Vehicle[]>(() => {
-    const saved = localStorage.getItem('fleet_vehicles');
-    return saved ? JSON.parse(saved) : [
-      { id: '1', plate: 'ABC-1234', model: 'Sprinter', brand: 'Mercedes', year: 2022, currentKm: 45000, fuelLevel: 75, fuelType: 'Diesel', status: VehicleStatus.AVAILABLE },
-      { id: '2', plate: 'XYZ-5678', model: 'Hilux', brand: 'Toyota', year: 2023, currentKm: 12000, fuelLevel: 100, fuelType: 'Diesel', status: VehicleStatus.AVAILABLE },
-      { id: '3', plate: 'DEF-9012', model: 'Daily', brand: 'Iveco', year: 2021, currentKm: 89000, fuelLevel: 40, fuelType: 'Diesel', status: VehicleStatus.MAINTENANCE },
-    ];
-  });
+  const [vehicles, setVehicles] = useState<Vehicle[]>([]);
+  const [drivers, setDrivers] = useState<Driver[]>([]);
+  const [activeTrips, setActiveTrips] = useState<Trip[]>([]);
+  const [scheduledTrips, setScheduledTrips] = useState<ScheduledTrip[]>([]);
+  const [completedTrips, setCompletedTrips] = useState<Trip[]>([]);
+  const [maintenanceRecords, setMaintenanceRecords] = useState<MaintenanceRecord[]>([]);
+  const [fines, setFines] = useState<Fine[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [currentUser, setCurrentUser] = useState<Driver | null>(null);
 
-  const [drivers, setDrivers] = useState<Driver[]>(() => {
-    const saved = localStorage.getItem('fleet_drivers');
-    return saved ? JSON.parse(saved) : [
-      { id: 'd1', name: 'João Silva', license: '12345678', category: 'D', email: 'joao@frota.com', phone: '(11) 98888-7777', username: 'joao', password: '123', passwordChanged: false },
-      { id: 'd2', name: 'Maria Santos', license: '87654321', category: 'B', email: 'maria@frota.com', phone: '(11) 97777-6666', username: 'maria', password: '123', passwordChanged: false },
-      { id: 'admin', name: 'Gestor de Frota', license: '0000', category: 'AB', email: 'admin@frota.com', phone: '(11) 90000-0000', username: 'admin', password: 'admin', passwordChanged: true },
-    ];
-  });
+  // Inicialização (Simula carregamento inicial do Backend)
+  useEffect(() => {
+    const init = async () => {
+      setIsLoading(true);
+      try {
+        const [v, d, a, s, c] = await Promise.all([
+          apiService.getVehicles(),
+          apiService.getDrivers(),
+          apiService.getActiveTrips(),
+          apiService.getScheduledTrips(),
+          apiService.getCompletedTrips()
+        ]);
+        
+        // Se a base estiver vazia, popula com dados iniciais (Mock)
+        if (d.length === 0) {
+          const initialDrivers = [
+            { id: 'admin', name: 'Gestor de Frota', license: '0000', category: 'AB', username: 'admin', password: 'admin', passwordChanged: true }
+          ];
+          for (const drv of initialDrivers) await apiService.saveDriver(drv);
+          setDrivers(initialDrivers);
+        } else {
+          setDrivers(d);
+        }
 
-  const [activeTrips, setActiveTrips] = useState<Trip[]>(() => {
-    const saved = localStorage.getItem('fleet_active_trips');
-    return saved ? JSON.parse(saved) : [];
-  });
+        setVehicles(v);
+        setActiveTrips(a);
+        setScheduledTrips(s);
+        setCompletedTrips(c);
+        
+        const savedUser = sessionStorage.getItem('fleet_current_user');
+        if (savedUser) setCurrentUser(JSON.parse(savedUser));
+      } finally {
+        setIsLoading(false);
+      }
+    };
+    init();
+  }, []);
 
-  const [scheduledTrips, setScheduledTrips] = useState<ScheduledTrip[]>(() => {
-    const saved = localStorage.getItem('fleet_scheduled_trips');
-    return saved ? JSON.parse(saved) : [];
-  });
-
-  const [completedTrips, setCompletedTrips] = useState<Trip[]>(() => {
-    const saved = localStorage.getItem('fleet_completed_trips');
-    return saved ? JSON.parse(saved) : [];
-  });
-
-  const [checklists, setChecklists] = useState<Checklist[]>(() => {
-    const saved = localStorage.getItem('fleet_checklists');
-    return saved ? JSON.parse(saved) : [];
-  });
-  
-  const [maintenanceRecords, setMaintenanceRecords] = useState<MaintenanceRecord[]>(() => {
-    const saved = localStorage.getItem('fleet_maintenance');
-    if (saved) return JSON.parse(saved);
-    return [
-      { id: 'm-initial-3', vehicleId: '3', date: '2023-12-01', serviceType: 'Revisão de Motor', cost: 1200, km: 88900, notes: 'Veículo enviado para oficina para revisão periódica.' }
-    ];
-  });
-
-  const [fines, setFines] = useState<Fine[]>(() => {
-    const saved = localStorage.getItem('fleet_fines');
-    return saved ? JSON.parse(saved) : [];
-  });
-
-  const [occurrences, setOccurrences] = useState<Occurrence[]>(() => {
-    const saved = localStorage.getItem('fleet_occurrences');
-    return saved ? JSON.parse(saved) : [];
-  });
-
-  const [notifications, setNotifications] = useState<AppNotification[]>(() => {
-    const saved = localStorage.getItem('fleet_notifications');
-    return saved ? JSON.parse(saved) : [];
-  });
-
-  const [currentUser, setCurrentUser] = useState<Driver | null>(() => {
-    const saved = sessionStorage.getItem('fleet_current_user');
-    return saved ? JSON.parse(saved) : null;
-  });
-
-  useEffect(() => { localStorage.setItem('fleet_vehicles', JSON.stringify(vehicles)); }, [vehicles]);
-  useEffect(() => { localStorage.setItem('fleet_active_trips', JSON.stringify(activeTrips)); }, [activeTrips]);
-  useEffect(() => { localStorage.setItem('fleet_completed_trips', JSON.stringify(completedTrips)); }, [completedTrips]);
-  useEffect(() => { localStorage.setItem('fleet_drivers', JSON.stringify(drivers)); }, [drivers]);
-  useEffect(() => { localStorage.setItem('fleet_checklists', JSON.stringify(checklists)); }, [checklists]);
-  useEffect(() => { localStorage.setItem('fleet_maintenance', JSON.stringify(maintenanceRecords)); }, [maintenanceRecords]);
-  useEffect(() => { localStorage.setItem('fleet_fines', JSON.stringify(fines)); }, [fines]);
-  useEffect(() => { localStorage.setItem('fleet_occurrences', JSON.stringify(occurrences)); }, [occurrences]);
-  useEffect(() => { localStorage.setItem('fleet_scheduled_trips', JSON.stringify(scheduledTrips)); }, [scheduledTrips]);
-  useEffect(() => { localStorage.setItem('fleet_notifications', JSON.stringify(notifications)); }, [notifications]);
-
-  const login = (user: string, pass: string) => {
-    const driver = drivers.find(d => d.username === user && d.password === pass);
+  const login = async (user: string, pass: string) => {
+    setIsLoading(true);
+    const driver = await apiService.login(user, pass);
+    setIsLoading(false);
     if (driver) {
       setCurrentUser(driver);
       sessionStorage.setItem('fleet_current_user', JSON.stringify(driver));
@@ -133,88 +96,65 @@ export const FleetProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     sessionStorage.removeItem('fleet_current_user');
   }, []);
 
-  const changePassword = (newPass: string) => {
-    if (!currentUser) return;
-    const updatedUser = { ...currentUser, password: newPass, passwordChanged: true };
-    setCurrentUser(updatedUser);
-    sessionStorage.setItem('fleet_current_user', JSON.stringify(updatedUser));
-    setDrivers(prev => prev.map(d => d.id === currentUser.id ? updatedUser : d));
+  const startTrip = async (trip: Trip, checklist: Checklist) => {
+    setIsLoading(true);
+    await apiService.startTrip(trip, checklist);
+    setActiveTrips(prev => [...prev, trip]);
+    setVehicles(prev => prev.map(v => v.id === trip.vehicleId ? { ...v, status: VehicleStatus.IN_USE } : v));
+    setIsLoading(false);
+  };
+
+  const endTrip = async (tripId: string, currentKm: number, endTime: string, expenses: any) => {
+    setIsLoading(true);
+    await apiService.endTrip(tripId, currentKm, endTime, expenses);
+    const trip = activeTrips.find(t => t.id === tripId);
+    if (trip) {
+      setCompletedTrips(prev => [{ ...trip, endTime }, ...prev]);
+      setActiveTrips(prev => prev.filter(t => t.id !== tripId));
+      setVehicles(prev => prev.map(v => v.id === trip.vehicleId ? { ...v, status: VehicleStatus.AVAILABLE, currentKm } : v));
+    }
+    setIsLoading(false);
+  };
+
+  const addDriver = async (d: Driver) => {
+    setIsLoading(true);
+    await apiService.saveDriver(d);
+    setDrivers(prev => [...prev, d]);
+    setIsLoading(false);
+  };
+
+  const updateDriver = async (id: string, updates: Partial<Driver>) => {
+    setIsLoading(true);
+    const drivers = await apiService.getDrivers();
+    const updated = drivers.map(d => d.id === id ? { ...d, ...updates } : d);
+    localStorage.setItem('fleet_drivers', JSON.stringify(updated));
+    setDrivers(updated);
+    setIsLoading(false);
+  };
+
+  const deleteDriver = async (id: string) => {
+    await apiService.deleteDriver(id);
+    setDrivers(prev => prev.filter(d => d.id !== id));
   };
 
   const resetDatabase = () => {
-    const keys = ['fleet_vehicles', 'fleet_active_trips', 'fleet_completed_trips', 'fleet_drivers', 'fleet_checklists', 'fleet_maintenance', 'fleet_fines', 'fleet_occurrences', 'fleet_scheduled_trips', 'fleet_notifications'];
-    keys.forEach(k => localStorage.removeItem(k));
-    sessionStorage.removeItem('fleet_current_user');
+    localStorage.clear();
+    sessionStorage.clear();
     window.location.reload();
   };
 
-  const addVehicle = (v: Vehicle) => setVehicles(prev => [...prev, v]);
-  const updateVehicle = (id: string, updates: Partial<Vehicle>) => setVehicles(prev => prev.map(v => v.id === id ? { ...v, ...updates } : v));
-  const updateDriver = (id: string, updates: Partial<Driver>) => setDrivers(prev => prev.map(d => d.id === id ? { ...d, ...updates } : d));
-  const addDriver = (d: Driver) => setDrivers(prev => [...prev, { ...d, passwordChanged: d.passwordChanged ?? false }]);
-  const deleteDriver = (id: string) => setDrivers(prev => prev.filter(d => d.id !== id));
-
-  const startTrip = (trip: Trip, checklist: Checklist) => {
-    setActiveTrips(prev => [...prev, trip]);
-    setChecklists(prev => [...prev, checklist]);
-    setVehicles(prev => prev.map(v => v.id === trip.vehicleId ? { ...v, status: VehicleStatus.IN_USE, currentKm: checklist.km, fuelLevel: checklist.fuelLevel, lastChecklist: checklist } : v));
-    setDrivers(prev => prev.map(d => d.id === trip.driverId ? { ...d, activeVehicleId: trip.vehicleId } : d));
-  };
-
-  const endTrip = (tripId: string, currentKm: number, endTime: string, expenses?: { fuel: number, other: number, notes: string }) => {
-    setActiveTrips(prevActive => {
-      const trip = prevActive.find(t => t.id === tripId);
-      if (!trip) return prevActive;
-      const finishedTrip: Trip = { ...trip, endTime, distance: currentKm - trip.startKm, fuelExpense: expenses?.fuel || 0, otherExpense: expenses?.other || 0, expenseNotes: expenses?.notes || '' }; 
-      setCompletedTrips(prev => [finishedTrip, ...prev]);
-      setVehicles(prev => prev.map(v => v.id === trip.vehicleId ? { ...v, status: VehicleStatus.AVAILABLE, currentKm } : v));
-      setDrivers(prev => prev.map(d => d.id === trip.driverId ? { ...d, activeVehicleId: undefined } : d));
-      return prevActive.filter(t => t.id !== tripId);
-    });
-  };
-
-  const cancelTrip = useCallback((tripId: string) => {
-    setActiveTrips(prevActive => {
-      const trip = prevActive.find(t => t.id === tripId);
-      if (!trip) return prevActive;
-      setVehicles(prevVehicles => prevVehicles.map(v => v.id === trip.vehicleId ? { ...v, status: VehicleStatus.AVAILABLE } : v));
-      setDrivers(prevDrivers => prevDrivers.map(d => d.id === trip.driverId ? { ...d, activeVehicleId: undefined } : d));
-      return prevActive.filter(t => t.id !== tripId);
-    });
-  }, []);
-
-  const deleteScheduledTrip = useCallback((id: string) => {
-    setScheduledTrips(prev => prev.filter(t => t.id !== id));
-  }, []);
-
-  const addMaintenanceRecord = (record: MaintenanceRecord) => {
-    setMaintenanceRecords(prev => [record, ...prev]);
-    setVehicles(prev => prev.map(v => v.id === record.vehicleId ? { ...v, status: VehicleStatus.MAINTENANCE } : v));
-  };
-
-  const resolveMaintenance = useCallback((vehicleId: string, recordId: string | null | undefined, currentKm: number, returnDate: string, finalCost?: number) => {
-    setVehicles(prev => prev.map(v => v.id === vehicleId ? { ...v, status: VehicleStatus.AVAILABLE, currentKm } : v));
-    setMaintenanceRecords(prev => {
-      let targetId = recordId;
-      if (!targetId) targetId = prev.find(m => m.vehicleId === vehicleId && !m.returnDate)?.id;
-      if (targetId) return prev.map(m => m.id === targetId ? { ...m, returnDate, cost: finalCost !== undefined ? finalCost : m.cost } : m);
-      return prev;
-    });
-  }, []);
-
-  const addScheduledTrip = (trip: ScheduledTrip) => setScheduledTrips(prev => [trip, ...prev]);
-  const updateScheduledTrip = (id: string, updates: Partial<ScheduledTrip>) => setScheduledTrips(prev => prev.map(t => t.id === id ? { ...t, ...updates } : t));
-  const updateTrip = (tripId: string, updates: Partial<Trip>) => setActiveTrips(prev => prev.map(t => t.id === tripId ? { ...t, ...updates } : t));
-  const addFine = (fine: Fine) => setFines(prev => [fine, ...prev]);
-  const deleteFine = (id: string) => setFines(prev => prev.filter(f => f.id !== id));
-  const addOccurrence = (occ: Occurrence) => setOccurrences(prev => [occ, ...prev]);
-  const markNotificationAsRead = (id: string) => setNotifications(prev => prev.map(n => n.id === id ? { ...n, isRead: true } : n));
+  // Funções simplificadas para o protótipo manter funcionamento
+  const addVehicle = async (v: Vehicle) => { setVehicles(p => [...p, v]); localStorage.setItem('fleet_vehicles', JSON.stringify([...vehicles, v])); };
+  const updateVehicle = async (id: string, updates: Partial<Vehicle>) => { const n = vehicles.map(v => v.id === id ? {...v, ...updates} : v); setVehicles(n); localStorage.setItem('fleet_vehicles', JSON.stringify(n)); };
+  const addScheduledTrip = async (t: ScheduledTrip) => { const n = [t, ...scheduledTrips]; setScheduledTrips(n); localStorage.setItem('fleet_scheduled_trips', JSON.stringify(n)); };
+  const updateTrip = async (id: string, updates: Partial<Trip>) => { const n = activeTrips.map(t => t.id === id ? {...t, ...updates} : t); setActiveTrips(n); localStorage.setItem('fleet_active_trips', JSON.stringify(n)); };
+  const cancelTrip = async (id: string) => { setActiveTrips(p => p.filter(t => t.id !== id)); };
 
   return (
     <FleetContext.Provider value={{
-      vehicles, drivers, activeTrips, completedTrips, scheduledTrips, checklists, maintenanceRecords, notifications, fines, occurrences,
-      addVehicle, updateVehicle, addDriver, updateDriver, deleteDriver, startTrip, updateTrip, addScheduledTrip, updateScheduledTrip, deleteScheduledTrip, endTrip, cancelTrip, addMaintenanceRecord, resolveMaintenance, addFine, deleteFine, addOccurrence, markNotificationAsRead,
-      currentUser, login, logout, changePassword, resetDatabase
+      vehicles, drivers, activeTrips, completedTrips, scheduledTrips, maintenanceRecords, fines, isLoading,
+      currentUser, addVehicle, updateVehicle, addDriver, updateDriver, deleteDriver, startTrip, updateTrip, addScheduledTrip, endTrip, cancelTrip,
+      login, logout, resetDatabase
     }}>
       {children}
     </FleetContext.Provider>
