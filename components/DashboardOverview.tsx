@@ -69,7 +69,6 @@ const DashboardOverview: React.FC<DashboardOverviewProps> = ({ onStartSchedule, 
         return;
       }
       
-      // Combina observações do trajeto com as notas finais de despesa
       const finalNotes = expenseNotes.trim() 
         ? `NOTAS FINAIS: ${expenseNotes.trim()}\n\nDIÁRIO DE BORDO:\n${myActiveTrip.observations || 'Nenhuma ocorrência relatada.'}`
         : myActiveTrip.observations || 'Nenhuma ocorrência relatada.';
@@ -235,18 +234,41 @@ const DashboardOverview: React.FC<DashboardOverviewProps> = ({ onStartSchedule, 
             <div className="space-y-6">
               <div className="bg-slate-50 p-6 rounded-3xl border border-slate-100">
                 <label className="block text-[10px] font-write text-slate-400 uppercase text-center mb-4 tracking-widest font-bold">Odômetro no Painel (KM)</label>
-                <input type="number" value={endKm} onChange={(e) => setEndKm(parseInt(e.target.value) || 0)} className="w-full bg-transparent outline-none font-write text-5xl text-slate-950 text-center" autoFocus />
+                <input 
+                  type="number" 
+                  value={endKm} 
+                  onChange={(e) => setEndKm(parseInt(e.target.value) || 0)} 
+                  onFocus={(e) => e.target.select()}
+                  className="w-full bg-transparent outline-none font-write text-5xl text-slate-950 text-center" 
+                  autoFocus 
+                />
                 <p className="text-[9px] text-slate-400 text-center mt-3 uppercase font-bold tracking-widest">KM Inicial: {myActiveTrip?.startKm}</p>
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100">
                   <label className="block text-[9px] font-write text-slate-400 uppercase mb-2 tracking-widest font-bold">Combustível (R$)</label>
-                  <input type="number" step="0.01" value={fuelExpense} onChange={(e) => setFuelExpense(parseFloat(e.target.value) || 0)} className="w-full bg-transparent outline-none font-write text-xl text-slate-950" placeholder="0,00" />
+                  <input 
+                    type="number" 
+                    step="0.01" 
+                    value={fuelExpense} 
+                    onChange={(e) => setFuelExpense(parseFloat(e.target.value) || 0)} 
+                    onFocus={(e) => e.target.select()}
+                    className="w-full bg-transparent outline-none font-write text-xl text-slate-950" 
+                    placeholder="0,00" 
+                  />
                 </div>
                 <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100">
                   <label className="block text-[9px] font-write text-slate-400 uppercase mb-2 tracking-widest font-bold">Outros Custos (R$)</label>
-                  <input type="number" step="0.01" value={otherExpense} onChange={(e) => setOtherExpense(parseFloat(e.target.value) || 0)} className="w-full bg-transparent outline-none font-write text-xl text-slate-950" placeholder="0,00" />
+                  <input 
+                    type="number" 
+                    step="0.01" 
+                    value={otherExpense} 
+                    onChange={(e) => setOtherExpense(parseFloat(e.target.value) || 0)} 
+                    onFocus={(e) => e.target.select()}
+                    className="w-full bg-transparent outline-none font-write text-xl text-slate-950" 
+                    placeholder="0,00" 
+                  />
                 </div>
               </div>
 
