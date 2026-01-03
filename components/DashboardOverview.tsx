@@ -9,7 +9,7 @@ interface DashboardOverviewProps {
 }
 
 const DashboardOverview: React.FC<DashboardOverviewProps> = ({ onStartSchedule, onNavigate }) => {
-  const { vehicles, activeTrips, scheduledTrips, currentUser, endTrip } = useFleet();
+  const { vehicles, activeTrips, scheduledTrips, currentUser, endTrip, updateTrip } = useFleet();
   const [elapsedTime, setElapsedTime] = useState<string>('00:00:00');
   
   const isAdmin = currentUser?.username === 'admin';
@@ -39,10 +39,28 @@ const DashboardOverview: React.FC<DashboardOverviewProps> = ({ onStartSchedule, 
   }, [myActiveTrip]);
 
   const [showFinishModal, setShowFinishModal] = useState(false);
+  const [showOccurrenceModal, setShowOccurrenceModal] = useState(false);
+  const [occurrenceText, setOccurrenceText] = useState('');
+  
   const [endKm, setEndKm] = useState<number>(0);
   const [fuelExpense, setFuelExpense] = useState<number>(0);
   const [otherExpense, setOtherExpense] = useState<number>(0);
   const [expenseNotes, setExpenseNotes] = useState<string>('');
+
+  const handleAddOccurrence = () => {
+    if (!myActiveTrip || !occurrenceText.trim()) return;
+    
+    const timestamp = new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+    const newNote = `${timestamp}: ${occurrenceText.trim()}`;
+    const updatedObservations = myActiveTrip.observations 
+      ? `${myActiveTrip.observations}\n${newNote}`
+      : newNote;
+    
+    updateTrip(myActiveTrip.id, { observations: updatedObservations });
+    setOccurrenceText('');
+    setShowOccurrenceModal(false);
+    alert('Ocorrência registrada no diário de bordo.');
+  };
 
   const confirmFinish = () => {
     if (myActiveTrip) {
@@ -50,13 +68,18 @@ const DashboardOverview: React.FC<DashboardOverviewProps> = ({ onStartSchedule, 
         alert("O KM final deve ser maior que o KM inicial.");
         return;
       }
+      
+      // Combina observações do trajeto com as notas finais de despesa
+      const finalNotes = expenseNotes.trim() 
+        ? `NOTAS FINAIS: ${expenseNotes.trim()}\n\nDIÁRIO DE BORDO:\n${myActiveTrip.observations || 'Nenhuma ocorrência relatada.'}`
+        : myActiveTrip.observations || 'Nenhuma ocorrência relatada.';
+
       endTrip(myActiveTrip.id, endKm, new Date().toISOString(), {
         fuel: fuelExpense,
         other: otherExpense,
-        notes: expenseNotes
+        notes: finalNotes
       });
       
-      // Reset states
       setShowFinishModal(false);
       setFuelExpense(0);
       setOtherExpense(0);
@@ -97,13 +120,24 @@ const DashboardOverview: React.FC<DashboardOverviewProps> = ({ onStartSchedule, 
                 <p className="text-sm font-bold truncate">{myActiveTrip.destination}</p>
                 <p className="text-[10px] text-blue-400 font-bold uppercase mt-1">{myActiveTrip.city} - {myActiveTrip.state}</p>
              </div>
+
+             {myActiveTrip.observations && (
+               <div className="bg-amber-500/10 p-4 rounded-2xl border border-amber-500/20">
+                  <p className="text-[9px] text-amber-400 font-bold uppercase tracking-widest mb-2">Notas do Diário de Bordo</p>
+                  <p className="text-[10px] text-slate-300 whitespace-pre-line line-clamp-3">{myActiveTrip.observations}</p>
+               </div>
+             )}
           </div>
-          <div className="mt-8 flex gap-4 relative z-10">
-             <button onClick={() => window.open(`https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(myActiveTrip.destination)}`, '_blank')} className="flex-1 py-5 bg-blue-600 hover:bg-blue-500 rounded-2xl font-write text-[10px] uppercase tracking-widest shadow-xl transition-all active:scale-95 flex items-center justify-center gap-2">
+          
+          <div className="mt-8 grid grid-cols-2 gap-4 relative z-10">
+             <button onClick={() => window.open(`https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(myActiveTrip.destination)}`, '_blank')} className="py-5 bg-blue-600 hover:bg-blue-500 rounded-2xl font-write text-[10px] uppercase tracking-widest shadow-xl transition-all active:scale-95 flex items-center justify-center gap-2">
                 <i className="fas fa-location-arrow"></i> Ver no GPS
              </button>
-             <button onClick={() => { setEndKm(vehicles.find(v => v.id === myActiveTrip.vehicleId)?.currentKm || 0); setShowFinishModal(true); }} className="flex-1 py-5 bg-emerald-600 hover:bg-emerald-500 rounded-2xl font-write text-[10px] uppercase tracking-widest shadow-xl transition-all active:scale-95 flex items-center justify-center gap-2">
-                <i className="fas fa-flag-checkered"></i> Encerrar Rota
+             <button onClick={() => setShowOccurrenceModal(true)} className="py-5 bg-slate-700 hover:bg-slate-600 rounded-2xl font-write text-[10px] uppercase tracking-widest shadow-xl transition-all active:scale-95 flex items-center justify-center gap-2">
+                <i className="fas fa-exclamation-triangle"></i> Relatar Evento
+             </button>
+             <button onClick={() => { setEndKm(vehicles.find(v => v.id === myActiveTrip.vehicleId)?.currentKm || 0); setShowFinishModal(true); }} className="col-span-2 py-5 bg-emerald-600 hover:bg-emerald-500 rounded-2xl font-write text-[10px] uppercase tracking-widest shadow-xl transition-all active:scale-95 flex items-center justify-center gap-2">
+                <i className="fas fa-flag-checkered"></i> Encerrar Rota e Despesas
              </button>
           </div>
         </div>
@@ -163,6 +197,33 @@ const DashboardOverview: React.FC<DashboardOverviewProps> = ({ onStartSchedule, 
         </div>
       )}
 
+      {/* Modal Relatar Ocorrência Durante Trajeto */}
+      {showOccurrenceModal && (
+        <div className="fixed inset-0 z-[250] flex items-center justify-center p-4 bg-slate-900/80 backdrop-blur-md animate-in fade-in duration-300">
+          <div className="bg-white w-full max-w-md rounded-[2.5rem] shadow-2xl p-10 space-y-6 animate-in zoom-in-95 duration-300">
+            <div className="text-center">
+               <h3 className="text-xl font-write uppercase text-slate-800 tracking-tight">Novo Registro de Trajeto</h3>
+               <p className="text-xs text-slate-400 font-medium mt-1">Relate qualquer evento relevante agora</p>
+            </div>
+            <div className="bg-slate-50 p-6 rounded-3xl border border-slate-100">
+               <label className="block text-[9px] font-write text-slate-400 uppercase mb-3 tracking-widest font-bold">O que aconteceu?</label>
+               <textarea 
+                 autoFocus
+                 value={occurrenceText} 
+                 onChange={(e) => setOccurrenceText(e.target.value)} 
+                 className="w-full bg-transparent outline-none font-write text-sm text-slate-950 min-h-[120px]" 
+                 placeholder="Ex: Pneu furado na BR-101, parando para trocar..." 
+               />
+            </div>
+            <div className="flex gap-4">
+              <button onClick={() => setShowOccurrenceModal(false)} className="flex-1 py-5 text-slate-400 font-write uppercase text-[10px] tracking-widest font-bold">Cancelar</button>
+              <button onClick={handleAddOccurrence} className="flex-[2] py-5 bg-slate-900 text-white rounded-2xl font-write uppercase text-xs tracking-widest shadow-xl active:scale-95 transition-all">Salvar no Diário</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal Finalização de Rota (End of Trip) */}
       {showFinishModal && (
         <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-slate-900/80 backdrop-blur-md animate-in fade-in duration-300">
           <div className="bg-white w-full max-w-lg rounded-[2.5rem] shadow-2xl p-10 custom-scrollbar overflow-y-auto max-h-[90vh] animate-in zoom-in-95 duration-300">
@@ -189,9 +250,16 @@ const DashboardOverview: React.FC<DashboardOverviewProps> = ({ onStartSchedule, 
                 </div>
               </div>
 
+              {myActiveTrip?.observations && (
+                <div className="bg-amber-50 p-4 rounded-2xl border border-amber-100">
+                  <p className="text-[9px] font-write text-amber-600 uppercase mb-2 tracking-widest font-bold">Resumo do Diário de Borbo (Lido)</p>
+                  <p className="text-[10px] text-amber-800 italic whitespace-pre-line">{myActiveTrip.observations}</p>
+                </div>
+              )}
+
               <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100">
-                <label className="block text-[9px] font-write text-slate-400 uppercase mb-2 tracking-widest font-bold">Ocorrências / Observações</label>
-                <textarea value={expenseNotes} onChange={(e) => setExpenseNotes(e.target.value)} className="w-full bg-transparent outline-none font-write text-xs text-slate-950 min-h-[80px]" placeholder="Relate sinistros, atrasos ou problemas técnicos..." />
+                <label className="block text-[9px] font-write text-slate-400 uppercase mb-2 tracking-widest font-bold">Comentários Finais</label>
+                <textarea value={expenseNotes} onChange={(e) => setExpenseNotes(e.target.value)} className="w-full bg-transparent outline-none font-write text-xs text-slate-950 min-h-[80px]" placeholder="Informações finais sobre a descarga ou veículo..." />
               </div>
             </div>
 

@@ -38,7 +38,7 @@ const SchedulingPage: React.FC = () => {
     return new Date(year, month - 1, day, 12, 0, 0);
   };
 
-  // Cálculo de impedimentos (Manutenção e Rodízio)
+  // Cálculo de impedimentos (Manutenção, Rodízio e Conflito de Agenda)
   const restrictionInfo = useMemo(() => {
     if (!newSchedule.vehicleId) return null;
     
@@ -53,7 +53,20 @@ const SchedulingPage: React.FC = () => {
       };
     }
 
-    // 2. BLOQUEIO OPERACIONAL: RODÍZIO SP
+    // 2. BLOQUEIO DE CONFLITO: VEÍCULO JÁ AGENDADO NESTA DATA
+    const hasConflict = scheduledTrips.some(trip => 
+      trip.vehicleId === newSchedule.vehicleId && 
+      trip.scheduledDate === newSchedule.scheduledDate
+    );
+    if (hasConflict) {
+      const formattedDate = new Date(newSchedule.scheduledDate + 'T12:00:00').toLocaleDateString('pt-BR');
+      return {
+        type: 'CONFLICT',
+        message: `CONFLITO DE ESCALA: O veículo ${vehicle.plate} já possui uma viagem agendada para o dia ${formattedDate}. Escolha outro veículo ou altere a data.`
+      };
+    }
+
+    // 3. BLOQUEIO OPERACIONAL: RODÍZIO SP
     if (isDestSaoPaulo && newSchedule.scheduledDate) {
       const dateObj = getValidationDate(newSchedule.scheduledDate);
       if (checkSPRodizio(vehicle.plate, dateObj)) {
@@ -65,7 +78,7 @@ const SchedulingPage: React.FC = () => {
     }
 
     return null;
-  }, [isDestSaoPaulo, newSchedule.vehicleId, newSchedule.scheduledDate, vehicles]);
+  }, [isDestSaoPaulo, newSchedule.vehicleId, newSchedule.scheduledDate, vehicles, scheduledTrips]);
 
   const isBlocked = !!restrictionInfo;
 
@@ -138,12 +151,14 @@ const SchedulingPage: React.FC = () => {
                     const isInMaintenance = v.status === VehicleStatus.MAINTENANCE;
                     const dateObj = getValidationDate(newSchedule.scheduledDate);
                     const isRestricted = isDestSaoPaulo && checkSPRodizio(v.plate, dateObj);
+                    const isConflict = scheduledTrips.some(trip => trip.vehicleId === v.id && trip.scheduledDate === newSchedule.scheduledDate);
                     
                     return (
-                      <option key={v.id} value={v.id} disabled={isInMaintenance || isRestricted} className={isInMaintenance ? 'text-slate-300' : ''}>
+                      <option key={v.id} value={v.id} disabled={isInMaintenance || isRestricted || isConflict} className={isInMaintenance || isConflict ? 'text-slate-300' : ''}>
                         {v.plate} - {v.model} 
-                        {isInMaintenance ? ' [BLOQUEADO: EM MANUTENÇÃO]' : ''}
-                        {isRestricted ? ' [BLOQUEADO: RODÍZIO]' : ''}
+                        {isInMaintenance ? ' [MANUTENÇÃO]' : ''}
+                        {isRestricted ? ' [RODÍZIO]' : ''}
+                        {isConflict ? ' [OCUPADO NESTA DATA]' : ''}
                       </option>
                     );
                   })}
@@ -164,12 +179,12 @@ const SchedulingPage: React.FC = () => {
 
             {/* Banner de Impedimento Dinâmico */}
             {isBlocked && (
-              <div className={`border-2 p-6 rounded-2xl flex items-center gap-4 animate-in shake duration-300 ${restrictionInfo.type === 'MAINTENANCE' ? 'bg-amber-50 border-amber-200 text-amber-900' : 'bg-red-50 border-red-200 text-red-900'}`}>
-                 <div className={`w-12 h-12 rounded-xl flex items-center justify-center text-xl shrink-0 shadow-lg text-white ${restrictionInfo.type === 'MAINTENANCE' ? 'bg-amber-600' : 'bg-red-600'}`}>
-                    <i className={`fas ${restrictionInfo.type === 'MAINTENANCE' ? 'fa-tools' : 'fa-ban'}`}></i>
+              <div className={`border-2 p-6 rounded-2xl flex items-center gap-4 animate-in shake duration-300 ${restrictionInfo.type === 'MAINTENANCE' ? 'bg-amber-50 border-amber-200 text-amber-900' : restrictionInfo.type === 'CONFLICT' ? 'bg-slate-900 border-slate-700 text-white' : 'bg-red-50 border-red-200 text-red-900'}`}>
+                 <div className={`w-12 h-12 rounded-xl flex items-center justify-center text-xl shrink-0 shadow-lg text-white ${restrictionInfo.type === 'MAINTENANCE' ? 'bg-amber-600' : restrictionInfo.type === 'CONFLICT' ? 'bg-indigo-600' : 'bg-red-600'}`}>
+                    <i className={`fas ${restrictionInfo.type === 'MAINTENANCE' ? 'fa-tools' : restrictionInfo.type === 'CONFLICT' ? 'fa-hand' : 'fa-ban'}`}></i>
                  </div>
                  <div>
-                    <h4 className="text-xs font-write uppercase tracking-widest">Alerta de Bloqueio</h4>
+                    <h4 className={`text-xs font-write uppercase tracking-widest ${restrictionInfo.type === 'CONFLICT' ? 'text-indigo-400' : ''}`}>Alerta de Bloqueio</h4>
                     <p className="text-[11px] font-bold">{restrictionInfo.message}</p>
                  </div>
               </div>
