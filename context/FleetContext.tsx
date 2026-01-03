@@ -159,7 +159,6 @@ export const FleetProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       const updatedList = prev.map(v => v.id === id ? { ...v, ...updates } : v);
       const vehicle = updatedList.find(v => v.id === id);
       
-      // Lógica de alerta de combustível baixo via update direto
       if (vehicle && updates.fuelLevel !== undefined && updates.fuelLevel < 10) {
         const notification: AppNotification = {
           id: Math.random().toString(36).substr(2, 9),
@@ -196,7 +195,6 @@ export const FleetProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     setVehicles(prev => prev.map(v => v.id === trip.vehicleId ? { ...v, status: VehicleStatus.IN_USE, currentKm: checklist.km, fuelLevel: checklist.fuelLevel, lastChecklist: checklist } : v));
     setDrivers(prev => prev.map(d => d.id === trip.driverId ? { ...d, activeVehicleId: trip.vehicleId } : d));
 
-    // Lógica de alerta de combustível baixo via checklist de início de viagem
     if (checklist.fuelLevel < 10) {
       const vehicle = vehicles.find(v => v.id === trip.vehicleId);
       const notification: AppNotification = {
@@ -214,23 +212,47 @@ export const FleetProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   };
 
   const endTrip = (tripId: string, currentKm: number, endTime: string, expenses?: { fuel: number, other: number, notes: string }) => {
-    const trip = activeTrips.find(t => t.id === tripId);
-    if (!trip) return;
-    const distance = currentKm - trip.startKm;
-    const finishedTrip: Trip = { ...trip, endTime, distance, fuelExpense: expenses?.fuel || 0, otherExpense: expenses?.other || 0, expenseNotes: expenses?.notes || '' }; 
-    setActiveTrips(prev => prev.filter(t => t.id !== tripId));
-    setCompletedTrips(prev => [finishedTrip, ...prev]);
-    setVehicles(prev => prev.map(v => v.id === trip.vehicleId ? { ...v, status: VehicleStatus.AVAILABLE, currentKm } : v));
-    setDrivers(prev => prev.map(d => d.id === trip.driverId ? { ...d, activeVehicleId: undefined } : d));
+    setActiveTrips(prevActive => {
+      const trip = prevActive.find(t => t.id === tripId);
+      if (!trip) return prevActive;
+
+      const distance = currentKm - trip.startKm;
+      const finishedTrip: Trip = { 
+        ...trip, 
+        endTime, 
+        distance, 
+        fuelExpense: expenses?.fuel || 0, 
+        otherExpense: expenses?.other || 0, 
+        expenseNotes: expenses?.notes || '' 
+      }; 
+
+      setCompletedTrips(prev => [finishedTrip, ...prev]);
+      setVehicles(prev => prev.map(v => v.id === trip.vehicleId ? { ...v, status: VehicleStatus.AVAILABLE, currentKm } : v));
+      setDrivers(prev => prev.map(d => d.id === trip.driverId ? { ...d, activeVehicleId: undefined } : d));
+
+      return prevActive.filter(t => t.id !== tripId);
+    });
   };
 
-  const cancelTrip = (tripId: string) => {
-    const trip = activeTrips.find(t => t.id === tripId);
-    if (!trip) return;
-    setActiveTrips(prev => prev.filter(t => t.id !== tripId));
-    setVehicles(prev => prev.map(v => v.id === trip.vehicleId ? { ...v, status: VehicleStatus.AVAILABLE } : v));
-    setDrivers(prev => prev.map(d => d.id === trip.driverId ? { ...d, activeVehicleId: undefined } : d));
-  };
+  const cancelTrip = useCallback((tripId: string) => {
+    setActiveTrips(prevActive => {
+      const trip = prevActive.find(t => t.id === tripId);
+      if (!trip) return prevActive;
+
+      // Reverter status do veículo
+      setVehicles(prevVehicles => prevVehicles.map(v => 
+        v.id === trip.vehicleId ? { ...v, status: VehicleStatus.AVAILABLE } : v
+      ));
+
+      // Reverter status do motorista
+      setDrivers(prevDrivers => prevDrivers.map(d => 
+        d.id === trip.driverId ? { ...d, activeVehicleId: undefined } : d
+      ));
+
+      // Remover da lista de viagens ativas
+      return prevActive.filter(t => t.id !== tripId);
+    });
+  }, []);
 
   const addMaintenanceRecord = (record: MaintenanceRecord) => {
     setMaintenanceRecords(prev => [record, ...prev]);
@@ -261,7 +283,6 @@ export const FleetProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 
   const addFine = (fine: Fine) => {
     setFines(prev => [fine, ...prev]);
-    // Gera notificação automática para o motorista
     const vehicle = vehicles.find(v => v.id === fine.vehicleId);
     const notification: AppNotification = {
       id: Math.random().toString(36).substr(2, 9),

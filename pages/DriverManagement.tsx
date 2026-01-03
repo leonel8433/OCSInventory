@@ -57,14 +57,46 @@ const DriverManagement: React.FC = () => {
     e.preventDefault();
     if (!newDriver.name || !newDriver.license || !newDriver.username) return;
 
+    // Validações de Duplicidade
+    const normalizedUsername = newDriver.username.toLowerCase().trim().replace(/\s/g, '');
+    const normalizedLicense = newDriver.license.trim();
+    const normalizedEmail = newDriver.email?.toLowerCase().trim();
+
+    const usernameExists = drivers.some(d => 
+      d.username.toLowerCase().trim() === normalizedUsername && d.id !== editingDriverId
+    );
+    
+    const licenseExists = drivers.some(d => 
+      d.license.trim() === normalizedLicense && d.id !== editingDriverId
+    );
+
+    const emailExists = normalizedEmail && drivers.some(d => 
+      d.email?.toLowerCase().trim() === normalizedEmail && d.id !== editingDriverId
+    );
+
+    if (usernameExists) {
+      alert(`Erro: O nome de usuário "@${normalizedUsername}" já está sendo utilizado.`);
+      return;
+    }
+
+    if (licenseExists) {
+      alert(`Erro: Já existe um motorista cadastrado com a CNH ${normalizedLicense}.`);
+      return;
+    }
+
+    if (emailExists) {
+      alert(`Erro: O e-mail "${normalizedEmail}" já está cadastrado para outro motorista.`);
+      return;
+    }
+
     if (editingDriverId) {
       const updates: Partial<Driver> = {
         name: newDriver.name,
-        license: newDriver.license,
+        license: normalizedLicense,
         category: newDriver.category,
-        email: newDriver.email,
+        email: normalizedEmail,
         phone: newDriver.phone,
-        username: newDriver.username,
+        username: normalizedUsername,
         avatar: newDriver.avatar
       };
 
@@ -79,11 +111,11 @@ const DriverManagement: React.FC = () => {
       const driver: Driver = {
         id: Math.random().toString(36).substr(2, 9),
         name: newDriver.name,
-        license: newDriver.license,
+        license: normalizedLicense,
         category: newDriver.category,
-        email: newDriver.email,
+        email: normalizedEmail,
         phone: newDriver.phone,
-        username: newDriver.username,
+        username: normalizedUsername,
         password: newDriver.password || '123',
         passwordChanged: false,
         avatar: newDriver.avatar
@@ -163,7 +195,7 @@ const DriverManagement: React.FC = () => {
         </div>
       </div>
 
-      {/* FORMULÁRIO DE MULTAS (CORREÇÃO: AGORA VISÍVEL) */}
+      {/* FORMULÁRIO DE MULTAS */}
       {showFineForm && (
         <div className="bg-white p-8 rounded-3xl shadow-xl border border-red-100 animate-in fade-in slide-in-from-top-4 duration-300">
           <div className="flex items-center gap-3 mb-8">

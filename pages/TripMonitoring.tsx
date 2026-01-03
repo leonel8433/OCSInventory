@@ -55,7 +55,7 @@ const SimulatedProgress: React.FC<{ startTime: string }> = ({ startTime }) => {
 };
 
 const TripMonitoring: React.FC = () => {
-  const { activeTrips, vehicles, drivers, updateTrip, endTrip } = useFleet();
+  const { activeTrips, vehicles, drivers, updateTrip, endTrip, cancelTrip } = useFleet();
   const [finishingTripId, setFinishingTripId] = useState<string | null>(null);
   const [endKm, setEndKm] = useState<number>(0);
   const [editingRouteTrip, setEditingRouteTrip] = useState<Trip | null>(null);
@@ -83,6 +83,13 @@ const TripMonitoring: React.FC = () => {
       endTrip(finishingTripId, endKm, new Date().toISOString());
       setFinishingTripId(null);
       alert('Operação encerrada com sucesso!');
+    }
+  };
+
+  const handleAdminCancelTrip = (tripId: string) => {
+    if (window.confirm('Como administrador, deseja CANCELAR esta viagem? O veículo e motorista ficarão disponíveis imediatamente e nenhum registro histórico de conclusão será salvo.')) {
+      cancelTrip(tripId);
+      alert('Viagem cancelada pelo administrador.');
     }
   };
 
@@ -160,15 +167,19 @@ const TripMonitoring: React.FC = () => {
                   </div>
                 </div>
 
-                <div className="flex gap-3">
+                <div className="flex gap-2">
                   <button 
                     onClick={() => { setFinishingTripId(trip.id); setEndKm(vehicle?.currentKm || 0); }} 
-                    className="flex-1 py-4 bg-emerald-600 hover:bg-emerald-500 text-white rounded-2xl font-write text-[10px] uppercase tracking-[0.2em] transition-all shadow-lg shadow-emerald-900/20"
+                    className="flex-[2] py-4 bg-emerald-600 hover:bg-emerald-500 text-white rounded-2xl font-write text-[10px] uppercase tracking-[0.2em] transition-all shadow-lg shadow-emerald-900/20"
                   >
                     Encerrar
                   </button>
-                  <button className="flex-1 py-4 bg-white/5 hover:bg-white/10 text-slate-400 rounded-2xl font-write text-[10px] uppercase tracking-[0.2em] transition-all border border-white/5">
-                    Detalhes
+                  <button 
+                    onClick={() => handleAdminCancelTrip(trip.id)}
+                    className="flex-1 py-4 bg-red-600/10 hover:bg-red-600 text-red-500 hover:text-white rounded-2xl font-write text-[10px] uppercase tracking-[0.2em] transition-all border border-red-600/20 flex items-center justify-center"
+                    title="Cancelar Viagem"
+                  >
+                    <i className="fas fa-ban"></i>
                   </button>
                 </div>
               </div>

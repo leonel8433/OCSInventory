@@ -109,9 +109,20 @@ const FleetManager: React.FC = () => {
     e.preventDefault();
     if (!newVehicle.plate || !newVehicle.brand || !newVehicle.model) return;
 
+    // Validação de Duplicidade de Placa
+    const normalizedPlate = newVehicle.plate.toUpperCase().replace(/\s/g, '').trim();
+    const plateExists = vehicles.some(v => 
+      v.plate.toUpperCase().replace(/\s/g, '').trim() === normalizedPlate && v.id !== editingVehicleId
+    );
+
+    if (plateExists) {
+      alert(`Erro: Já existe um veículo cadastrado com a placa ${normalizedPlate}.`);
+      return;
+    }
+
     if (editingVehicleId) {
       updateVehicle(editingVehicleId, {
-        plate: newVehicle.plate.toUpperCase(),
+        plate: normalizedPlate,
         brand: newVehicle.brand,
         model: newVehicle.model,
         year: parseInt(newVehicle.year),
@@ -122,7 +133,7 @@ const FleetManager: React.FC = () => {
     } else {
       const vehicle: Vehicle = {
         id: Math.random().toString(36).substr(2, 9),
-        plate: newVehicle.plate.toUpperCase(),
+        plate: normalizedPlate,
         brand: newVehicle.brand,
         model: newVehicle.model,
         year: parseInt(newVehicle.year),
