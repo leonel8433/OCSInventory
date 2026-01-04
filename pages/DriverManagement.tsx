@@ -57,41 +57,28 @@ const DriverManagement: React.FC = () => {
     e.preventDefault();
     if (!newDriver.name || !newDriver.license || !newDriver.username) return;
 
-    // Validações de Duplicidade
+    const normalizedName = newDriver.name.trim();
     const normalizedUsername = newDriver.username.toLowerCase().trim().replace(/\s/g, '');
     const normalizedLicense = newDriver.license.trim();
     const normalizedEmail = newDriver.email?.toLowerCase().trim();
 
-    const usernameExists = drivers.some(d => 
-      d.username.toLowerCase().trim() === normalizedUsername && d.id !== editingDriverId
-    );
-    
-    const licenseExists = drivers.some(d => 
-      d.license.trim() === normalizedLicense && d.id !== editingDriverId
-    );
-
-    const emailExists = normalizedEmail && drivers.some(d => 
-      d.email?.toLowerCase().trim() === normalizedEmail && d.id !== editingDriverId
-    );
+    // Verificações de duplicidade
+    const usernameExists = drivers.some(d => d.username === normalizedUsername && d.id !== editingDriverId);
+    const licenseExists = drivers.some(d => d.license === normalizedLicense && d.id !== editingDriverId);
 
     if (usernameExists) {
-      alert(`Erro: O nome de usuário "@${normalizedUsername}" já está sendo utilizado.`);
+      alert(`Erro: O nome de usuário "@${normalizedUsername}" já está em uso.`);
       return;
     }
 
     if (licenseExists) {
-      alert(`Erro: Já existe um motorista cadastrado com a CNH ${normalizedLicense}.`);
-      return;
-    }
-
-    if (emailExists) {
-      alert(`Erro: O e-mail "${normalizedEmail}" já está cadastrado para outro motorista.`);
+      alert(`Erro: A CNH "${normalizedLicense}" já está cadastrada para outro condutor.`);
       return;
     }
 
     if (editingDriverId) {
       const updates: Partial<Driver> = {
-        name: newDriver.name,
+        name: normalizedName,
         license: normalizedLicense,
         category: newDriver.category,
         email: normalizedEmail,
@@ -106,11 +93,11 @@ const DriverManagement: React.FC = () => {
       }
 
       updateDriver(editingDriverId, updates);
-      alert('Motorista atualizado com sucesso!');
+      alert('Cadastro do motorista atualizado com sucesso!');
     } else {
       const driver: Driver = {
         id: Math.random().toString(36).substr(2, 9),
-        name: newDriver.name,
+        name: normalizedName,
         license: normalizedLicense,
         category: newDriver.category,
         email: normalizedEmail,
@@ -148,12 +135,23 @@ const DriverManagement: React.FC = () => {
   const handleAvatarChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
+      // Validação de tamanho simples (2MB) para não sobrecarregar o localStorage
+      if (file.size > 2 * 1024 * 1024) {
+        alert("A imagem selecionada é muito grande. Por favor, escolha uma foto de até 2MB.");
+        return;
+      }
+
       const reader = new FileReader();
       reader.onloadend = () => {
         setNewDriver(prev => ({ ...prev, avatar: reader.result as string }));
       };
       reader.readAsDataURL(file);
     }
+  };
+
+  const removeAvatar = () => {
+    setNewDriver(prev => ({ ...prev, avatar: '' }));
+    if (fileInputRef.current) fileInputRef.current.value = '';
   };
 
   const resetFormState = () => {
@@ -195,7 +193,6 @@ const DriverManagement: React.FC = () => {
         </div>
       </div>
 
-      {/* FORMULÁRIO DE MULTAS */}
       {showFineForm && (
         <div className="bg-white p-8 rounded-3xl shadow-xl border border-red-100 animate-in fade-in slide-in-from-top-4 duration-300">
           <div className="flex items-center gap-3 mb-8">
@@ -308,7 +305,7 @@ const DriverManagement: React.FC = () => {
               <div className="flex flex-col items-center gap-4 shrink-0">
                 <div 
                   onClick={() => fileInputRef.current?.click()}
-                  className="w-40 h-40 rounded-3xl bg-slate-50 border-2 border-dashed border-slate-200 flex flex-col items-center justify-center cursor-pointer hover:border-blue-400 hover:bg-blue-50 transition-all overflow-hidden group shadow-inner"
+                  className="w-40 h-40 rounded-3xl bg-slate-50 border-2 border-dashed border-slate-200 flex flex-col items-center justify-center cursor-pointer hover:border-blue-400 hover:bg-blue-50 transition-all overflow-hidden group shadow-inner relative"
                 >
                   {newDriver.avatar ? (
                     <img src={newDriver.avatar} alt="Preview" className="w-full h-full object-cover" />
@@ -318,9 +315,26 @@ const DriverManagement: React.FC = () => {
                       <span className="text-[10px] font-bold text-slate-300 mt-3 uppercase tracking-widest">Foto Perfil</span>
                     </>
                   )}
+                  {newDriver.avatar && (
+                    <div className="absolute inset-0 bg-black/20 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                       <i className="fas fa-sync text-white text-xl"></i>
+                    </div>
+                  )}
                 </div>
                 <input type="file" ref={fileInputRef} className="hidden" accept="image/*" onChange={handleAvatarChange} />
-                <p className="text-[9px] text-slate-400 font-medium uppercase text-center max-w-[150px]">Clique na moldura para fazer upload do avatar</p>
+                
+                <div className="flex flex-col gap-2 w-full max-w-[160px]">
+                  {newDriver.avatar && (
+                    <button 
+                      type="button" 
+                      onClick={removeAvatar}
+                      className="text-[9px] font-bold text-red-500 uppercase hover:text-red-700 transition-colors flex items-center justify-center gap-1"
+                    >
+                      <i className="fas fa-trash-alt"></i> Remover Foto
+                    </button>
+                  )}
+                  <p className="text-[9px] text-slate-400 font-medium uppercase text-center">Clique na moldura para fazer upload do avatar</p>
+                </div>
               </div>
               
               <div className="flex-1 space-y-8">

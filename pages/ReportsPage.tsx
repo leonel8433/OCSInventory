@@ -1,7 +1,7 @@
 
 import React, { useState, useMemo } from 'react';
 import { useFleet } from '../context/FleetContext';
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell, PieChart, Pie } from 'recharts';
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend } from 'recharts';
 
 type ReportType = 'trips' | 'consumption' | 'fines' | 'management';
 
@@ -11,7 +11,7 @@ const ReportsPage: React.FC = () => {
   
   const isAdmin = currentUser?.username === 'admin';
 
-  // Date Filters
+  // Filtros de Data
   const [startDate, setStartDate] = useState(() => {
     const d = new Date();
     d.setDate(d.getDate() - 30);
@@ -19,7 +19,7 @@ const ReportsPage: React.FC = () => {
   });
   const [endDate, setEndDate] = useState(() => new Date().toISOString().split('T')[0]);
 
-  // Data filtering logic
+  // Lógica de filtragem de dados
   const filteredTrips = useMemo(() => {
     return completedTrips.filter(t => {
       const tripDate = t.startTime.split('T')[0];
@@ -41,7 +41,7 @@ const ReportsPage: React.FC = () => {
     return maintenanceRecords.filter(m => m.date >= startDate && m.date <= endDate);
   }, [maintenanceRecords, startDate, endDate]);
 
-  // Report 1: Trip Volume Data
+  // Dados para Relatório de Volume de Viagens
   const tripChartData = useMemo(() => {
     if (isAdmin) {
       return drivers.map(d => {
@@ -49,7 +49,6 @@ const ReportsPage: React.FC = () => {
         return { name: d.name.split(' ')[0], viagens: count };
       }).filter(s => s.viagens > 0);
     } else {
-      // For single driver, show trips by day
       const dailyMap: Record<string, number> = {};
       filteredTrips.forEach(t => {
         const day = new Date(t.startTime).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' });
@@ -59,7 +58,7 @@ const ReportsPage: React.FC = () => {
     }
   }, [drivers, filteredTrips, isAdmin]);
 
-  // Report 4: Management Summary
+  // Resumo Gerencial e Custos
   const managementSummary = useMemo(() => {
     const totalDist = filteredTrips.reduce((sum, t) => sum + (t.distance || 0), 0);
     const totalMaintCost = filteredMaintenance.reduce((sum, m) => sum + m.cost, 0);
@@ -70,7 +69,15 @@ const ReportsPage: React.FC = () => {
     return { totalDist, totalMaintCost, totalFineCost, totalTripFuel, totalTripOther };
   }, [filteredTrips, filteredMaintenance, filteredFines]);
 
-  // CSV Export Logic
+  // Dados para o Gráfico de Consumo (Pizza)
+  const consumptionPieData = useMemo(() => [
+    { name: 'Combustível', value: managementSummary.totalTripFuel },
+    { name: 'Outras Despesas', value: managementSummary.totalTripOther }
+  ].filter(d => d.value > 0), [managementSummary]);
+
+  const COLORS = ['#10b981', '#6366f1'];
+
+  // Lógica de Exportação CSV
   const handleExportCSV = () => {
     let csvContent = "";
     let fileName = `relatorio_${activeReport}_${startDate}_a_${endDate}.csv`;
@@ -126,6 +133,10 @@ const ReportsPage: React.FC = () => {
     } else {
       alert("Nenhum dado disponível para exportação no período selecionado.");
     }
+  };
+
+  const formatCurrency = (value: number) => {
+    return value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
   };
 
   return (
@@ -201,7 +212,6 @@ const ReportsPage: React.FC = () => {
               </h3>
               <div className="h-80 w-full">
                 {tripChartData.length > 0 ? (
-                  /* Fixed typo: replaced '開ResponsiveContainer' with 'ResponsiveContainer' */
                   <ResponsiveContainer width="100%" height="100%">
                     <BarChart data={tripChartData}>
                       <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
@@ -210,7 +220,6 @@ const ReportsPage: React.FC = () => {
                       <Tooltip contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 10px 15px -3px rgba(0,0,0,0.1)' }} />
                       <Bar dataKey="viagens" fill="#3b82f6" radius={[6, 6, 0, 0]} />
                     </BarChart>
-                  /* Fixed typo: replaced '開ResponsiveContainer' with 'ResponsiveContainer' */
                   </ResponsiveContainer>
                 ) : (
                   <div className="h-full flex items-center justify-center text-slate-300 italic font-medium">Nenhum dado no período selecionado</div>
@@ -237,24 +246,62 @@ const ReportsPage: React.FC = () => {
         )}
 
         {activeReport === 'consumption' && (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-            <div className="bg-white p-8 rounded-3xl shadow-sm border border-slate-100">
-               <p className="text-[10px] font-write text-slate-400 uppercase tracking-widest mb-2">Gasto em Combustível</p>
-               <p className="text-3xl font-write text-emerald-600">R$ {managementSummary.totalTripFuel.toLocaleString()}</p>
+          <div className="space-y-8">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+              <div className="bg-white p-8 rounded-3xl shadow-sm border border-slate-100">
+                <p className="text-[10px] font-write text-slate-400 uppercase tracking-widest mb-2">Combustível</p>
+                <p className="text-3xl font-write text-emerald-600">{formatCurrency(managementSummary.totalTripFuel)}</p>
+              </div>
+              <div className="bg-white p-8 rounded-3xl shadow-sm border border-slate-100">
+                <p className="text-[10px] font-write text-slate-400 uppercase tracking-widest mb-2">Outras Despesas</p>
+                <p className="text-3xl font-write text-indigo-600">{formatCurrency(managementSummary.totalTripOther)}</p>
+              </div>
+              <div className="bg-white p-8 rounded-3xl shadow-sm border border-slate-100">
+                <p className="text-[10px] font-write text-slate-400 uppercase tracking-widest mb-2">Custo Total</p>
+                <p className="text-3xl font-write text-slate-800">{formatCurrency(managementSummary.totalTripFuel + managementSummary.totalTripOther)}</p>
+              </div>
+              <div className="bg-white p-8 rounded-3xl shadow-sm border border-slate-100">
+                <p className="text-[10px] font-write text-slate-400 uppercase tracking-widest mb-2">Custo Médio / KM</p>
+                <p className="text-3xl font-write text-blue-600">
+                  {managementSummary.totalDist > 0 ? formatCurrency((managementSummary.totalTripFuel + managementSummary.totalTripOther) / managementSummary.totalDist) : 'R$ 0,00'}
+                </p>
+              </div>
             </div>
-            <div className="bg-white p-8 rounded-3xl shadow-sm border border-slate-100">
-               <p className="text-[10px] font-write text-slate-400 uppercase tracking-widest mb-2">Outras Despesas de Viagem</p>
-               <p className="text-3xl font-write text-blue-600">R$ {managementSummary.totalTripOther.toLocaleString()}</p>
-            </div>
-            <div className="bg-white p-8 rounded-3xl shadow-sm border border-slate-100">
-               <p className="text-[10px] font-write text-slate-400 uppercase tracking-widest mb-2">Custo Total de Operação</p>
-               <p className="text-3xl font-write text-slate-800">R$ {(managementSummary.totalTripFuel + managementSummary.totalTripOther).toLocaleString()}</p>
-            </div>
-            <div className="bg-white p-8 rounded-3xl shadow-sm border border-slate-100">
-               <p className="text-[10px] font-write text-slate-400 uppercase tracking-widest mb-2">Custo Médio por KM</p>
-               <p className="text-3xl font-write text-indigo-600">
-                 R$ {managementSummary.totalDist > 0 ? ((managementSummary.totalTripFuel + managementSummary.totalTripOther) / managementSummary.totalDist).toFixed(2) : '0.00'}
-               </p>
+
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+              <div className="bg-white p-8 rounded-3xl shadow-sm border border-slate-100 h-96">
+                <h3 className="text-sm font-write text-slate-800 uppercase tracking-widest mb-8">Distribuição de Despesas</h3>
+                {consumptionPieData.length > 0 ? (
+                  <ResponsiveContainer width="100%" height="100%">
+                    <PieChart>
+                      <Pie
+                        data={consumptionPieData}
+                        cx="50%"
+                        cy="50%"
+                        innerRadius={60}
+                        outerRadius={100}
+                        paddingAngle={5}
+                        dataKey="value"
+                      >
+                        {consumptionPieData.map((entry, index) => (
+                          <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                        ))}
+                      </Pie>
+                      <Tooltip formatter={(value: number) => formatCurrency(value)} />
+                      <Legend verticalAlign="bottom" height={36}/>
+                    </PieChart>
+                  </ResponsiveContainer>
+                ) : (
+                  <div className="h-full flex items-center justify-center text-slate-300 italic">Sem dados financeiros no período.</div>
+                )}
+              </div>
+              <div className="bg-slate-900 rounded-3xl p-8 text-white flex flex-col justify-center shadow-xl">
+                 <h4 className="text-lg font-write uppercase mb-4 text-blue-400">Dica Gerencial</h4>
+                 <p className="text-sm leading-relaxed opacity-80">
+                   As despesas de combustível representam {(managementSummary.totalTripFuel + managementSummary.totalTripOther) > 0 ? ((managementSummary.totalTripFuel / (managementSummary.totalTripFuel + managementSummary.totalTripOther)) * 100).toFixed(1) : 0}% do seu custo operacional neste período.
+                   Monitore o KM rodado para otimizar as rotas.
+                 </p>
+              </div>
             </div>
           </div>
         )}
@@ -264,7 +311,7 @@ const ReportsPage: React.FC = () => {
              <i className="fas fa-gavel text-4xl text-slate-200 mb-4"></i>
              <h3 className="text-sm font-write text-slate-800 uppercase tracking-widest mb-2">Multas e Infrações</h3>
              <p className="text-4xl font-write text-red-600 mb-2">{filteredFines.length}</p>
-             <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">Multas acumuladas no período selecionado (R$ {managementSummary.totalFineCost.toLocaleString()})</p>
+             <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">Multas acumuladas no período selecionado ({formatCurrency(managementSummary.totalFineCost)})</p>
           </div>
         )}
 
@@ -272,15 +319,15 @@ const ReportsPage: React.FC = () => {
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
             <div className="bg-white p-8 rounded-3xl shadow-sm border border-slate-100">
                <p className="text-[10px] font-write text-slate-400 uppercase tracking-widest mb-2">Manutenção Preventiva/Corretiva</p>
-               <p className="text-3xl font-write text-slate-800">R$ {managementSummary.totalMaintCost.toLocaleString()}</p>
+               <p className="text-3xl font-write text-slate-800">{formatCurrency(managementSummary.totalMaintCost)}</p>
             </div>
             <div className="bg-white p-8 rounded-3xl shadow-sm border border-slate-100">
                <p className="text-[10px] font-write text-slate-400 uppercase tracking-widest mb-2">Despesas Operacionais (Viagens)</p>
-               <p className="text-3xl font-write text-emerald-600">R$ {(managementSummary.totalTripFuel + managementSummary.totalTripOther).toLocaleString()}</p>
+               <p className="text-3xl font-write text-emerald-600">{formatCurrency(managementSummary.totalTripFuel + managementSummary.totalTripOther)}</p>
             </div>
             <div className="bg-white p-8 rounded-3xl shadow-sm border border-slate-100">
                <p className="text-[10px] font-write text-slate-400 uppercase tracking-widest mb-2">Total Geral de Despesas</p>
-               <p className="text-3xl font-write text-red-600">R$ {(managementSummary.totalMaintCost + managementSummary.totalFineCost + managementSummary.totalTripFuel + managementSummary.totalTripOther).toLocaleString()}</p>
+               <p className="text-3xl font-write text-red-600">{formatCurrency(managementSummary.totalMaintCost + managementSummary.totalFineCost + managementSummary.totalTripFuel + managementSummary.totalTripOther)}</p>
             </div>
           </div>
         )}

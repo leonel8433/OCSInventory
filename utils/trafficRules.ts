@@ -11,8 +11,9 @@ export const checkSPRodizio = (plate: string, date: Date): boolean => {
   const day = date.getDay();
   if (day === 0 || day === 6) return false; // Sem rodízio fins de semana
 
-  // Captura o último caractere da placa (dígito final)
-  const lastChar = plate.trim().slice(-1);
+  // Captura o último caractere da placa (no padrão Mercosul e Antigo, o último caractere é o dígito relevante)
+  const cleanPlate = plate.replace(/[^a-zA-Z0-9]/g, '').trim();
+  const lastChar = cleanPlate.slice(-1);
   const lastDigit = parseInt(lastChar);
   
   if (isNaN(lastDigit)) return false;
@@ -30,6 +31,7 @@ export const checkSPRodizio = (plate: string, date: Date): boolean => {
 
 /**
  * Identifica se uma localidade refere-se a São Paulo (Cidade ou Estado)
+ * De forma robusta contra variações de escrita.
  */
 export const isLocationSaoPaulo = (city?: string, state?: string, destination?: string): boolean => {
   const norm = (s: string) => (s || '').toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim();
@@ -38,20 +40,20 @@ export const isLocationSaoPaulo = (city?: string, state?: string, destination?: 
   const s = norm(state);
   const d = norm(destination);
 
-  // Verifica cidade, UF ou se o destino termina com " SP" ou contém "sao paulo"
-  return c.includes('sao paulo') || 
-         c === 'sp' || 
-         s === 'sp' || 
-         s.includes('sao paulo') || 
-         d.includes('sao paulo') || 
-         d.endsWith(' sp');
+  const keywords = ['sao paulo', 'sp', 'capital sp', 'sao paulo - sp'];
+  
+  // Verifica se qualquer um dos campos contém as palavras-chave
+  const check = (val: string) => keywords.some(k => val === k || val.includes(k));
+
+  return check(c) || check(s) || check(d) || d.endsWith(' sp');
 };
 
 /**
  * Retorna o nome do dia da semana em que o veículo possui restrição de rodízio.
  */
 export const getRodizioDayLabel = (plate: string): string => {
-  const lastChar = plate.trim().slice(-1);
+  const cleanPlate = plate.replace(/[^a-zA-Z0-9]/g, '').trim();
+  const lastChar = cleanPlate.slice(-1);
   const lastDigit = parseInt(lastChar);
   
   if (isNaN(lastDigit)) return 'Placa Inválida';

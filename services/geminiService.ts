@@ -55,12 +55,25 @@ export const getOptimizedRoute = async (origin: string, destination: string, way
 
 export const getFleetStatsAnalysis = async (fleetData: any) => {
   try {
+    const prompt = `Aja como um Consultor Sênior de Logística e Gestão de Frotas. 
+    Analise os seguintes dados consolidados da empresa:
+    ${JSON.stringify(fleetData)}
+
+    Gere um relatório estruturado contendo:
+    1. Resumo Executivo: Uma visão geral da saúde operacional da frota.
+    2. Análise de Eficiência: Como está o uso dos veículos e custos.
+    3. 3 Insights Acionáveis: Recomendações práticas para reduzir custos ou melhorar a segurança.
+
+    Seja direto, profissional e use formatação Markdown.`;
+
     const response = await ai.models.generateContent({
       model: "gemini-3-flash-preview",
-      contents: `Analyze this fleet data and provide 3 key management insights: ${JSON.stringify(fleetData)}`,
+      contents: prompt,
     });
+    
     return response.text;
   } catch (error) {
-    return "Insights unavailable at the moment.";
+    console.error("Error analyzing fleet:", error);
+    return "Não foi possível gerar a análise estratégica no momento. Verifique os dados e tente novamente.";
   }
 };
