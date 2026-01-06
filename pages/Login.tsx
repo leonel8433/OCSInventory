@@ -15,7 +15,9 @@ const Login: React.FC = () => {
     e.preventDefault();
     setError('');
     
-    if (!username || !password) {
+    const normalizedUsername = username.trim().toLowerCase();
+
+    if (!normalizedUsername || !password) {
       setError('Por favor, preencha todos os campos.');
       return;
     }
@@ -23,23 +25,29 @@ const Login: React.FC = () => {
     setIsSubmitting(true);
 
     try {
-      // Verifica se o usuário existe na base local
-      const userExists = drivers.some(d => d.username.toLowerCase() === username.toLowerCase());
+      /**
+       * O usuário 'admin' é um superuser. 
+       * Permitimos que ele tente o login mesmo que a lista de motoristas ainda não tenha carregado 
+       * ou se ele for um usuário especial não listado no endpoint geral de drivers.
+       */
+      const isSystemAdmin = normalizedUsername === 'admin';
+      const userExists = drivers.some(d => d.username.toLowerCase() === normalizedUsername);
       
-      if (!userExists) {
+      if (!userExists && !isSystemAdmin) {
         setError('Este usuário não está cadastrado no sistema.');
         setIsSubmitting(false);
         return;
       }
 
-      // Tenta realizar o login
-      const success = await login(username, password);
+      // Tenta realizar o login no servidor
+      const success = await login(normalizedUsername, password);
       
       if (!success) {
-        setError('Senha incorreta. Por favor, tente novamente.');
+        setError('Credenciais inválidas. Por favor, verifique usuário e senha.');
       }
-    } catch (err) {
-      setError('Ocorreu um erro ao tentar entrar. Tente novamente.');
+    } catch (err: any) {
+      console.error("Erro no login:", err);
+      setError(err.message || 'Ocorreu um erro ao tentar entrar. Verifique sua conexão.');
     } finally {
       setIsSubmitting(false);
     }
@@ -66,7 +74,7 @@ const Login: React.FC = () => {
                 <i className="fas fa-user absolute left-4 top-1/2 -translate-y-1/2 text-slate-300"></i>
                 <input
                   type="text"
-                  placeholder="Nome de usuário"
+                  placeholder="Ex: admin ou marcos.silva"
                   className="w-full pl-12 pr-4 py-4 rounded-2xl border border-slate-100 bg-white focus:ring-2 focus:ring-blue-500 focus:outline-none font-bold text-slate-950 transition-all"
                   value={username}
                   onChange={(e) => setUsername(e.target.value)}

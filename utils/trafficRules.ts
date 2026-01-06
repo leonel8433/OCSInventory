@@ -30,22 +30,39 @@ export const checkSPRodizio = (plate: string, date: Date): boolean => {
 };
 
 /**
- * Identifica se uma localidade refere-se a São Paulo (Cidade ou Estado)
- * De forma robusta contra variações de escrita.
+ * Identifica se uma localidade refere-se à CIDADE de São Paulo.
+ * Corrigido para ignorar a validação apenas pelo estado (SP).
  */
 export const isLocationSaoPaulo = (city?: string, state?: string, destination?: string): boolean => {
   const norm = (s: string) => (s || '').toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim();
   
   const c = norm(city);
-  const s = norm(state);
   const d = norm(destination);
 
-  const keywords = ['sao paulo', 'sp', 'capital sp', 'sao paulo - sp'];
+  // Palavras-chave que identificam especificamente a CIDADE/CAPITAL
+  const cityKeywords = [
+    'sao paulo', 
+    'sao paulo capital', 
+    'capital sao paulo', 
+    'sp capital', 
+    'capital sp'
+  ];
   
-  // Verifica se qualquer um dos campos contém as palavras-chave
-  const check = (val: string) => keywords.some(k => val === k || val.includes(k));
+  // 1. Se o campo Cidade foi preenchido, ele tem prioridade absoluta.
+  // Verificamos se a cidade é São Paulo (ignora se for apenas "SP" para evitar validar o estado todo)
+  if (c !== '') {
+    return cityKeywords.includes(c);
+  }
 
-  return check(c) || check(s) || check(d) || d.endsWith(' sp');
+  // 2. Se a cidade estiver vazia, tentamos inferir pelo destino,
+  // mas garantimos que não estamos pegando apenas o estado.
+  const checkDest = cityKeywords.some(k => d.includes(k));
+  
+  // Evita falsos positivos como "Estado de São Paulo" ou endereços que apenas terminam em "SP"
+  const isGenericState = d === 'sp' || d === 'sao paulo' && (norm(state) === 'sp');
+  
+  // Se o destino contém as keywords da cidade e NÃO é uma menção genérica ao estado
+  return checkDest && !d.includes('interior') && !d.includes('estado de');
 };
 
 /**

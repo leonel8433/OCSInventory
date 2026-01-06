@@ -1,4 +1,3 @@
-
 import React, { useState, useRef, useEffect } from 'react';
 import { useFleet } from '../context/FleetContext';
 import Logo from './Logo';
@@ -163,21 +162,25 @@ const Layout: React.FC<LayoutProps> = ({ children, activeTab, onTabChange }) => 
           </div>
         </header>
 
-        <div className="flex-1 overflow-y-auto p-8 md:p-12 custom-scrollbar">
+        <div className="flex-1 overflow-y-auto p-8 md:p-12 custom-scrollbar pb-safe">
           {children}
         </div>
 
-        {/* Bottom Nav Mobile */}
-        <nav className="md:hidden bg-white/95 backdrop-blur-md border-t border-slate-100 flex items-center overflow-x-auto p-3 z-20 pb-safe custom-scrollbar">
-          <div className="flex items-center gap-2 min-w-full">
+        {/* Bottom Nav Mobile Compacta */}
+        <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-white/95 backdrop-blur-md border-t border-slate-100 overflow-x-auto z-20 pb-[env(safe-area-inset-bottom)] custom-scrollbar-h shadow-[0_-4px_10px_rgba(0,0,0,0.03)]">
+          <div className="flex items-center gap-1 px-2 py-1.5 w-max min-w-full">
             {visibleMenuItems.map(item => (
               <button 
                 key={item.id} 
                 onClick={() => onTabChange(item.id)} 
-                className={`flex flex-col items-center px-5 py-3 rounded-2xl transition-all flex-shrink-0 ${activeTab === item.id ? 'text-blue-600 bg-blue-50/50 font-write' : 'text-slate-300'}`}
+                className={`flex flex-col items-center px-3 py-1.5 rounded-xl transition-all flex-shrink-0 min-w-[62px] ${
+                  activeTab === item.id 
+                  ? 'text-blue-600 bg-blue-50/50 font-write' 
+                  : 'text-slate-400'
+                }`}
               >
-                <i className={`fas ${item.icon} text-xl`}></i>
-                <span className="text-[9px] font-bold mt-1 uppercase tracking-wider">{item.label}</span>
+                <i className={`fas ${item.icon} text-base mb-0.5`}></i>
+                <span className="text-[7px] font-bold uppercase tracking-tight text-center">{item.label}</span>
               </button>
             ))}
           </div>

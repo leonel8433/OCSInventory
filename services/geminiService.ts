@@ -3,6 +3,7 @@ import { GoogleGenAI } from "@google/genai";
 
 const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
 
+// Fix: Use gemini-2.5-flash for maps grounding as it is 2.5 series.
 export const getRouteInsights = async (origin: string, destination: string, lat?: number, lng?: number) => {
   try {
     const response = await ai.models.generateContent({
@@ -19,7 +20,7 @@ export const getRouteInsights = async (origin: string, destination: string, lat?
     });
 
     return {
-      text: response.text,
+      text: response.text || "Sem detalhes da rota disponíveis.",
       grounding: response.candidates?.[0]?.groundingMetadata?.groundingChunks || []
     };
   } catch (error) {
@@ -28,6 +29,7 @@ export const getRouteInsights = async (origin: string, destination: string, lat?
   }
 };
 
+// Fix: Use gemini-2.5-flash for optimized route with maps grounding.
 export const getOptimizedRoute = async (origin: string, destination: string, waypoints: string[] = []) => {
   try {
     const waypointsStr = waypoints.length > 0 ? ` passing through ${waypoints.join(', ')}` : '';
@@ -44,7 +46,7 @@ export const getOptimizedRoute = async (origin: string, destination: string, way
     });
 
     return {
-      text: response.text,
+      text: response.text || "Não foi possível otimizar a rota.",
       grounding: response.candidates?.[0]?.groundingMetadata?.groundingChunks || []
     };
   } catch (error) {
@@ -53,6 +55,7 @@ export const getOptimizedRoute = async (origin: string, destination: string, way
   }
 };
 
+// Fix: Use gemini-3-pro-preview for fleet stats analysis as it is a complex text task.
 export const getFleetStatsAnalysis = async (fleetData: any) => {
   try {
     const prompt = `Aja como um Consultor Sênior de Logística e Gestão de Frotas. 
@@ -67,11 +70,11 @@ export const getFleetStatsAnalysis = async (fleetData: any) => {
     Seja direto, profissional e use formatação Markdown.`;
 
     const response = await ai.models.generateContent({
-      model: "gemini-3-flash-preview",
+      model: "gemini-3-pro-preview",
       contents: prompt,
     });
     
-    return response.text;
+    return response.text || "Relatório indisponível.";
   } catch (error) {
     console.error("Error analyzing fleet:", error);
     return "Não foi possível gerar a análise estratégica no momento. Verifique os dados e tente novamente.";

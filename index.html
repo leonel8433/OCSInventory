@@ -1,4 +1,3 @@
-
 <!DOCTYPE html>
 <html lang="pt-BR">
   <head>
@@ -34,6 +33,11 @@
       .custom-scrollbar::-webkit-scrollbar { width: 6px; }
       .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
       .custom-scrollbar::-webkit-scrollbar-thumb { background: #e2e8f0; border-radius: 10px; }
+
+      /* Scrollbar Horizontal para o Menu Mobile */
+      .custom-scrollbar-h::-webkit-scrollbar { height: 4px; }
+      .custom-scrollbar-h::-webkit-scrollbar-track { background: transparent; }
+      .custom-scrollbar-h::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
       
       /* Efeito de Skeleton Loading para simular Backend */
       .skeleton {
@@ -44,6 +48,11 @@
       @keyframes loading {
         0% { background-position: 200% 0; }
         100% { background-position: -200% 0; }
+      }
+
+      /* Ajuste para evitar que o conteúdo fique atrás da nav mobile */
+      @media (max-width: 768px) {
+        .pb-safe { padding-bottom: calc(env(safe-area-inset-bottom) + 60px); }
       }
     </style>
   <script type="importmap">

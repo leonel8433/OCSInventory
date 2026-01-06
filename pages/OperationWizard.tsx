@@ -81,7 +81,6 @@ const OperationWizard: React.FC<OperationWizardProps> = ({ scheduledTripId, onCo
 
   const isKmInvalid = (checklist.km ?? 0) < (selectedVehicle?.currentKm ?? 0);
   
-  // Detecção robusta de São Paulo como destino
   const isSaoPaulo = useMemo(() => {
     return isLocationSaoPaulo(route.city, route.state, route.destination);
   }, [route.city, route.state, route.destination]);
@@ -344,7 +343,6 @@ const OperationWizard: React.FC<OperationWizardProps> = ({ scheduledTripId, onCo
               {vehicles.filter(v => v.status === VehicleStatus.AVAILABLE).map(v => {
                 const restricted = isSaoPaulo && checkSPRodizio(v.plate, getSafeTripDate());
                 
-                // Nova Verificação: Se o veículo está agendado para hoje por outra pessoa
                 const todayStr = new Date().toISOString().split('T')[0];
                 const reservation = scheduledTrips.find(s => s.vehicleId === v.id && s.scheduledDate === todayStr);
                 const isReservedForOther = reservation && reservation.driverId !== currentUser?.id;
@@ -449,7 +447,7 @@ const OperationWizard: React.FC<OperationWizardProps> = ({ scheduledTripId, onCo
                 ))}
             </div>
 
-            <div className="bg-slate-50 p-6 rounded-3xl border border-slate-100">
+            <div className="bg-slate-50 p-6 rounded-3xl border border-slate-100 animate-in fade-in duration-500">
                 <label className="block text-[10px] font-write text-slate-400 uppercase mb-3 tracking-widest font-bold flex items-center gap-2">
                   <i className="fas fa-comment-dots text-blue-500"></i> Anotações do Condutor
                 </label>
@@ -457,7 +455,7 @@ const OperationWizard: React.FC<OperationWizardProps> = ({ scheduledTripId, onCo
                   placeholder="Relate aqui qualquer observação sobre o veículo antes de sair (arranhões, barulhos, estado da carga)..." 
                   value={checklist.comments} 
                   onChange={(e) => setChecklist({ ...checklist, comments: e.target.value })} 
-                  className="w-full bg-white border border-slate-200 p-4 rounded-2xl font-bold text-slate-950 text-sm outline-none focus:ring-2 focus:ring-blue-500 min-h-[100px] transition-all"
+                  className="w-full bg-white border border-slate-200 p-4 rounded-2xl font-bold text-slate-950 text-sm outline-none focus:ring-2 focus:ring-blue-500 min-h-[120px] transition-all"
                 />
             </div>
 

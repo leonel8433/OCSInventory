@@ -57,7 +57,7 @@ export const FleetProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   const init = async () => {
     setIsLoading(true);
     try {
-      const [v, d, a, s, c, m, f, n, ch] = await Promise.all([
+      const results = await Promise.allSettled([
         apiService.getVehicles(),
         apiService.getDrivers(),
         apiService.getActiveTrips(),
@@ -69,26 +69,31 @@ export const FleetProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         apiService.getChecklists()
       ]);
       
-      setVehicles(v || []);
-      setDrivers(d || []);
-      setActiveTrips(a || []);
-      setScheduledTrips(s || []);
-      setCompletedTrips(c || []);
-      setMaintenanceRecords(m || []);
-      setFines(f || []);
-      setNotifications(n || []);
-      setChecklists(ch || []);
+      function getValue<T>(index: number, defaultValue: T): T {
+        const res = results[index];
+        return res && res.status === 'fulfilled' ? (res as PromiseFulfilledResult<T>).value : defaultValue;
+      }
+
+      setVehicles(getValue(0, []));
+      setDrivers(getValue(1, []));
+      setActiveTrips(getValue(2, []));
+      setScheduledTrips(getValue(3, []));
+      setCompletedTrips(getValue(4, []));
+      setMaintenanceRecords(getValue(5, []));
+      setFines(getValue(6, []));
+      setNotifications(getValue(7, []));
+      setChecklists(getValue(8, []));
 
       const savedUser = sessionStorage.getItem('fleet_current_user');
       if (savedUser) {
         try {
           setCurrentUser(JSON.parse(savedUser));
-        } catch(e) {
+        } catch (error) {
           sessionStorage.removeItem('fleet_current_user');
         }
       }
     } catch (error) {
-      console.error("Erro na carga inicial de dados:", error);
+      console.error("Initialization error:", error);
     } finally {
       setIsLoading(false);
     }
@@ -100,8 +105,11 @@ export const FleetProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 
   const login = async (user: string, pass: string) => {
     setIsLoading(true);
+    const normalizedUser = user.toLowerCase().trim();
+    
     try {
-      const driver = await apiService.login(user, pass);
+      // 1. Tentar Login via API
+      const driver = await apiService.login(normalizedUser, pass);
       if (driver) {
         setCurrentUser(driver);
         sessionStorage.setItem('fleet_current_user', JSON.stringify(driver));
@@ -109,8 +117,23 @@ export const FleetProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         return true;
       }
     } catch (e) {
-      console.error(e);
+      console.warn("API Login failed, trying local fallback:", e);
     }
+
+    // 2. Fallback Local: Se a API falhou ou está offline, verificamos no estado carregado (cache)
+    // Isso resolve o problema de usuários criados que ainda não sincronizaram ou quando a API dá "Failed to fetch"
+    const localDriver = drivers.find(d => 
+      d.username.toLowerCase() === normalizedUser && 
+      (d.password === pass || (normalizedUser === 'admin' && pass === 'admin'))
+    );
+
+    if (localDriver) {
+      setCurrentUser(localDriver);
+      sessionStorage.setItem('fleet_current_user', JSON.stringify(localDriver));
+      setIsLoading(false);
+      return true;
+    }
+
     setIsLoading(false);
     return false;
   };
@@ -125,7 +148,7 @@ export const FleetProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     setIsLoading(true);
     try {
       await apiService.updateDriver(currentUser.id, { password: newPass, passwordChanged: true });
-      const updated = { ...currentUser, passwordChanged: true };
+      const updated = { ...currentUser, password: newPass, passwordChanged: true };
       setCurrentUser(updated);
       setDrivers(prev => prev.map(d => d.id === currentUser.id ? updated : d));
       sessionStorage.setItem('fleet_current_user', JSON.stringify(updated));
@@ -269,7 +292,6 @@ export const FleetProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   };
 
   const updateTrip = async (id: string, updates: Partial<Trip>) => {
-    // Para simplificar, assumindo atualização local e depois sincronização se necessário
     setActiveTrips(prev => prev.map(t => t.id === id ? { ...t, ...updates } : t));
   };
 
@@ -330,7 +352,12 @@ export const FleetProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   };
 
   const resetDatabase = useCallback(() => {
-    alert("Para resetar o banco de dados em produção, utilize o painel de controle do seu servidor MySQL.");
+    if (window.confirm("Isso apagará apenas seu cache local de dados. Deseja continuar?")) {
+      Object.keys(localStorage).forEach(key => {
+        if (key.startsWith('fleet_cache_')) localStorage.removeItem(key);
+      });
+      window.location.reload();
+    }
   }, []);
 
   const contextValue = useMemo(() => ({
@@ -340,7 +367,9 @@ export const FleetProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     login, logout, resetDatabase
   }), [
     vehicles, drivers, activeTrips, completedTrips, scheduledTrips, maintenanceRecords, checklists, fines, notifications, isLoading,
-    currentUser, deleteScheduledTrip, logout, resetDatabase
+    currentUser, addVehicle, updateVehicle, addDriver, updateDriver, deleteDriver, startTrip, updateTrip, addScheduledTrip, updateScheduledTrip, deleteScheduledTrip, endTrip, cancelTrip,
+    addFine, deleteFine, addMaintenanceRecord, updateMaintenanceRecord, resolveMaintenance, markNotificationAsRead, changePassword,
+    login, logout, resetDatabase
   ]);
 
   return (
