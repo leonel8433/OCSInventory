@@ -16,6 +16,11 @@ const OperationWizard: React.FC<OperationWizardProps> = ({ scheduledTripId, onCo
   const [isOptimizing, setIsOptimizing] = useState(false);
   const [aiSuggestion, setAiSuggestion] = useState<string | null>(null);
   
+  // Localidades IBGE
+  const [states, setStates] = useState<{ sigla: string, nome: string }[]>([]);
+  const [cities, setCities] = useState<string[]>([]);
+  const [isLoadingLocs, setIsLoadingLocs] = useState(false);
+
   const [selectedVehicle, setSelectedVehicle] = useState<Vehicle | null>(null);
   const [checklist, setChecklist] = useState<Partial<Checklist>>({
     km: 0,
@@ -33,6 +38,31 @@ const OperationWizard: React.FC<OperationWizardProps> = ({ scheduledTripId, onCo
     tripDate: new Date().toISOString().split('T')[0],
     waypoints: [] as string[]
   });
+
+  // Carregar Estados
+  useEffect(() => {
+    fetch('https://servicodados.ibge.gov.br/api/v1/localidades/estados?orderBy=nome')
+      .then(res => res.json())
+      .then(data => setStates(data))
+      .catch(err => console.error("Erro ao carregar estados:", err));
+  }, []);
+
+  // Carregar Cidades por UF
+  useEffect(() => {
+    if (route.state) {
+      setIsLoadingLocs(true);
+      fetch(`https://servicodados.ibge.gov.br/api/v1/localidades/estados/${route.state}/municipios?orderBy=nome`)
+        .then(res => res.json())
+        .then(data => {
+          setCities(data.map((c: any) => c.nome));
+          setIsLoadingLocs(false);
+        })
+        .catch(err => {
+          console.error("Erro ao carregar cidades:", err);
+          setIsLoadingLocs(false);
+        });
+    }
+  }, [route.state]);
 
   useEffect(() => {
     if (scheduledTripId) {
@@ -217,12 +247,32 @@ const OperationWizard: React.FC<OperationWizardProps> = ({ scheduledTripId, onCo
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-[10px] font-write text-slate-400 uppercase mb-2">Cidade</label>
-                  <input placeholder="Ex: São Paulo" value={route.city} onChange={(e) => setRoute({ ...route, city: e.target.value })} className="w-full p-4 bg-slate-50 border border-slate-100 rounded-2xl outline-none font-write font-bold text-slate-950" />
+                  <label className="block text-[10px] font-write text-slate-400 uppercase mb-2">Estado (UF)</label>
+                  <select 
+                    value={route.state} 
+                    onChange={(e) => setRoute({ ...route, state: e.target.value, city: '' })} 
+                    className="w-full p-4 bg-slate-50 border border-slate-100 rounded-2xl outline-none font-write font-bold text-slate-950"
+                  >
+                    <option value="">Selecione...</option>
+                    {states.map(s => <option key={s.sigla} value={s.sigla}>{s.sigla} - {s.nome}</option>)}
+                  </select>
                 </div>
                 <div>
-                  <label className="block text-[10px] font-write text-slate-400 uppercase mb-2">UF</label>
-                  <input placeholder="SP" maxLength={2} value={route.state} onChange={(e) => setRoute({ ...route, state: e.target.value.toUpperCase() })} className="w-full p-4 bg-slate-50 border border-slate-100 rounded-2xl outline-none font-write font-bold text-slate-950" />
+                  <label className="block text-[10px] font-write text-slate-400 uppercase mb-2 flex justify-between">
+                    Cidade
+                    {isLoadingLocs && <i className="fas fa-circle-notch fa-spin text-blue-500"></i>}
+                  </label>
+                  <input 
+                    list="wizard-cities"
+                    placeholder={route.state ? "Digite ou selecione..." : "UF primeiro"}
+                    disabled={!route.state}
+                    value={route.city} 
+                    onChange={(e) => setRoute({ ...route, city: e.target.value })} 
+                    className="w-full p-4 bg-slate-50 border border-slate-100 rounded-2xl outline-none font-write font-bold text-slate-950" 
+                  />
+                  <datalist id="wizard-cities">
+                    {cities.map((c, i) => <option key={i} value={c} />)}
+                  </datalist>
                 </div>
               </div>
             </div>
