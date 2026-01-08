@@ -66,7 +66,6 @@ async function fetchWithFallback<T>(url: string, options: RequestInit, cacheKey:
     const response = await fetch(url, options);
     return await handleResponse(response, cacheKey);
   } catch (error: any) {
-    // If it's a network error (Failed to fetch), use cache
     if (error.message.includes('Failed to fetch') || error.message.includes('NetworkError')) {
       console.warn(`Network error for ${url}. Using local fallback.`);
       return storage.get(cacheKey, defaultValue);
@@ -108,7 +107,7 @@ export const apiService = {
             password: 'admin',
             license: '000000',
             category: 'E',
-            passwordChanged: false // Força troca no primeiro acesso offline
+            passwordChanged: false 
           };
         }
       }
@@ -131,21 +130,22 @@ export const apiService = {
     const current = storage.get<Driver[]>('drivers', []);
     let found = false;
     const next = current.map(d => {
-      if (d.id === id) {
+      if (d.id === id || (d.username === 'admin' && id === 'admin-id')) {
         found = true;
         return { ...d, ...updates };
       }
       return d;
     });
 
-    // Se for o admin e não estiver na lista de motoristas comum, injeta ele no cache
-    if (!found && updates.username === 'admin') {
+    // Se for o admin e não foi encontrado na lista (ex: primeiro acesso), cria o registro no cache
+    if (!found && (id === 'admin-id' || updates.username === 'admin')) {
       const mockAdmin: Driver = {
         id: id,
         name: 'Administrador (Offline)',
         username: 'admin',
         license: '000000',
         category: 'E',
+        passwordChanged: true,
         ...updates
       };
       storage.set('drivers', [...current, mockAdmin]);

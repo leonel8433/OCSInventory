@@ -69,7 +69,6 @@ export const FleetProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         apiService.getFines(),
         apiService.getNotifications(),
         apiService.getChecklists(),
-        // Usamos cache local para audit logs já que a API original não tinha
         Promise.resolve(JSON.parse(localStorage.getItem('fleet_audit_logs') || '[]'))
       ]);
       
@@ -108,7 +107,6 @@ export const FleetProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     init();
   }, []);
 
-  // Persistir audit logs localmente (simulando backend)
   useEffect(() => {
     if (auditLogs.length > 0) {
       localStorage.setItem('fleet_audit_logs', JSON.stringify(auditLogs));
@@ -131,7 +129,6 @@ export const FleetProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       console.warn("API Login failed, trying local fallback:", e);
     }
 
-    // Fallback local: Prioriza sempre a senha do objeto se ele existir
     const localDriver = drivers.find(d => d.username.toLowerCase() === normalizedUser);
 
     if (localDriver && localDriver.password === pass) {
@@ -154,10 +151,24 @@ export const FleetProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     if (!currentUser) return;
     setIsLoading(true);
     try {
-      await apiService.updateDriver(currentUser.id, { password: newPass, passwordChanged: true });
-      const updated = { ...currentUser, password: newPass, passwordChanged: true };
+      const updates = { 
+        password: newPass, 
+        passwordChanged: true, 
+        username: currentUser.username // Crucial para o fallback local identificar o usuário
+      };
+      await apiService.updateDriver(currentUser.id, updates);
+      const updated = { ...currentUser, ...updates };
       setCurrentUser(updated);
-      setDrivers(prev => prev.map(d => d.id === currentUser.id ? updated : d));
+      
+      // Atualiza a lista de motoristas local para refletir a nova senha no login imediato
+      setDrivers(prev => {
+        const index = prev.findIndex(d => d.id === currentUser.id);
+        if (index !== -1) {
+          return prev.map(d => d.id === currentUser.id ? updated : d);
+        }
+        return [...prev, updated]; // Se não existia (admin em modo offline), adiciona
+      });
+      
       sessionStorage.setItem('fleet_current_user', JSON.stringify(updated));
     } finally {
       setIsLoading(false);
@@ -278,11 +289,9 @@ export const FleetProvider: React.FC<{ children: React.ReactNode }> = ({ childre
           timestamp: new Date().toISOString()
         };
 
-        // Salvar localmente o cancelamento no histórico
         setCompletedTrips(prev => [cancelledTrip, ...prev]);
         setAuditLogs(prev => [log, ...prev]);
         
-        // Atualizar status do veículo na API e localmente
         await apiService.updateVehicle(trip.vehicleId, { status: VehicleStatus.AVAILABLE });
         setActiveTrips(prev => prev.filter(t => t.id !== id));
         setVehicles(prev => prev.map(v => v.id === trip.vehicleId ? { ...v, status: VehicleStatus.AVAILABLE } : v));
@@ -296,7 +305,6 @@ export const FleetProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     const trip = activeTrips.find(t => t.id === id);
     if (!trip) return;
 
-    // Se for alteração de rota, gerar log
     if (updates.destination && updates.destination !== trip.destination) {
       const log: AuditLog = {
         id: Math.random().toString(36).substr(2, 9),
