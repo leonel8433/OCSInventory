@@ -11,6 +11,15 @@ export enum OccurrenceSeverity {
   HIGH = 'high'
 }
 
+export interface TireChange {
+  id: string;
+  vehicleId: string;
+  date: string;
+  brand: string;
+  model: string;
+  km: number;
+}
+
 export interface AuditLog {
   id: string;
   entityId: string; // ID da Viagem ou Veículo
@@ -44,6 +53,7 @@ export interface MaintenanceRecord {
   cost: number;
   km: number;
   notes: string;
+  returnNotes?: string; // Observações de saída
   categories?: string[]; // Campo para checklist de fechamento
 }
 
@@ -84,6 +94,7 @@ export interface Driver {
   passwordChanged?: boolean; 
   activeVehicleId?: string;
   avatar?: string;
+  initialPoints?: number; // Pontos que o motorista já possuía antes do sistema
 }
 
 export interface Checklist {

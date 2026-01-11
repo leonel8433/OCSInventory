@@ -1,6 +1,6 @@
 
 import React, { createContext, useContext, useState, useEffect, useCallback, useMemo } from 'react';
-import { Vehicle, Driver, Trip, Checklist, VehicleStatus, MaintenanceRecord, AppNotification, Fine, ScheduledTrip, AuditLog } from '../types';
+import { Vehicle, Driver, Trip, Checklist, VehicleStatus, MaintenanceRecord, AppNotification, Fine, ScheduledTrip, AuditLog, TireChange } from '../types';
 import { apiService } from '../services/api';
 
 interface FleetContextType {
@@ -12,6 +12,7 @@ interface FleetContextType {
   maintenanceRecords: MaintenanceRecord[];
   checklists: Checklist[];
   fines: Fine[];
+  tireChanges: TireChange[];
   notifications: AppNotification[];
   auditLogs: AuditLog[];
   isLoading: boolean;
@@ -30,9 +31,11 @@ interface FleetContextType {
   cancelTrip: (tripId: string, reason: string) => Promise<void>;
   addFine: (fine: Fine) => Promise<void>;
   deleteFine: (id: string) => Promise<void>;
+  addTireChange: (tc: TireChange) => Promise<void>;
+  deleteTireChange: (id: string) => Promise<void>;
   addMaintenanceRecord: (m: MaintenanceRecord) => Promise<void>;
   updateMaintenanceRecord: (id: string, updates: Partial<MaintenanceRecord>) => Promise<void>;
-  resolveMaintenance: (vId: string, rId: string, km: number, date: string, cost?: number) => Promise<void>;
+  resolveMaintenance: (vId: string, rId: string, km: number, date: string, cost?: number, returnNotes?: string) => Promise<void>;
   markNotificationAsRead: (id: string) => Promise<void>;
   changePassword: (newPass: string) => Promise<void>;
   login: (username: string, pass: string) => Promise<boolean>;
@@ -50,6 +53,7 @@ export const FleetProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   const [completedTrips, setCompletedTrips] = useState<Trip[]>([]);
   const [maintenanceRecords, setMaintenanceRecords] = useState<MaintenanceRecord[]>([]);
   const [fines, setFines] = useState<Fine[]>([]);
+  const [tireChanges, setTireChanges] = useState<TireChange[]>([]);
   const [notifications, setNotifications] = useState<AppNotification[]>([]);
   const [auditLogs, setAuditLogs] = useState<AuditLog[]>([]);
   const [checklists, setChecklists] = useState<Checklist[]>([]);
@@ -69,6 +73,7 @@ export const FleetProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         apiService.getFines(),
         apiService.getNotifications(),
         apiService.getChecklists(),
+        apiService.getTireChanges(),
         Promise.resolve(JSON.parse(localStorage.getItem('fleet_audit_logs') || '[]'))
       ]);
       
@@ -86,7 +91,8 @@ export const FleetProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       setFines(getValue(6, []));
       setNotifications(getValue(7, []));
       setChecklists(getValue(8, []));
-      setAuditLogs(getValue(9, []));
+      setTireChanges(getValue(9, []));
+      setAuditLogs(getValue(10, []));
 
       const savedUser = sessionStorage.getItem('fleet_current_user');
       if (savedUser) {
@@ -154,19 +160,18 @@ export const FleetProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       const updates = { 
         password: newPass, 
         passwordChanged: true, 
-        username: currentUser.username // Crucial para o fallback local identificar o usuário
+        username: currentUser.username 
       };
       await apiService.updateDriver(currentUser.id, updates);
       const updated = { ...currentUser, ...updates };
       setCurrentUser(updated);
       
-      // Atualiza a lista de motoristas local para refletir a nova senha no login imediato
       setDrivers(prev => {
         const index = prev.findIndex(d => d.id === currentUser.id);
         if (index !== -1) {
           return prev.map(d => d.id === currentUser.id ? updated : d);
         }
-        return [...prev, updated]; // Se não existia (admin em modo offline), adiciona
+        return [...prev, updated]; 
       });
       
       sessionStorage.setItem('fleet_current_user', JSON.stringify(updated));
@@ -230,6 +235,26 @@ export const FleetProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     }
   };
 
+  const addTireChange = async (tc: TireChange) => {
+    setIsLoading(true);
+    try {
+      await apiService.saveTireChange(tc);
+      setTireChanges(prev => [tc, ...prev]);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const deleteTireChange = async (id: string) => {
+    setIsLoading(true);
+    try {
+      await apiService.deleteTireChange(id);
+      setTireChanges(prev => prev.filter(t => t.id !== id));
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   const startTrip = async (trip: Trip, checklist: Checklist) => {
     setIsLoading(true);
     try {
@@ -269,6 +294,7 @@ export const FleetProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     if (!reason.trim()) throw new Error("O motivo do cancelamento é obrigatório.");
     setIsLoading(true);
     try {
+      await apiService.updateDriver(currentUser?.id || '', { activeVehicleId: undefined }); // Mock call
       const trip = activeTrips.find(t => t.id === id);
       if (trip) {
         const cancelledTrip: Trip = {
@@ -291,8 +317,6 @@ export const FleetProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 
         setCompletedTrips(prev => [cancelledTrip, ...prev]);
         setAuditLogs(prev => [log, ...prev]);
-        
-        await apiService.updateVehicle(trip.vehicleId, { status: VehicleStatus.AVAILABLE });
         setActiveTrips(prev => prev.filter(t => t.id !== id));
         setVehicles(prev => prev.map(v => v.id === trip.vehicleId ? { ...v, status: VehicleStatus.AVAILABLE } : v));
       }
@@ -393,11 +417,11 @@ export const FleetProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     }
   };
 
-  const resolveMaintenance = async (vId: string, rId: string, km: number, date: string, cost?: number) => {
+  const resolveMaintenance = async (vId: string, rId: string, km: number, date: string, cost?: number, returnNotes?: string) => {
     setIsLoading(true);
     try {
-      await apiService.resolveMaintenance(vId, rId, km, date, cost);
-      setMaintenanceRecords(prev => prev.map(r => r.id === rId ? { ...r, returnDate: date, cost: cost ?? r.cost } : r));
+      await apiService.resolveMaintenance(vId, rId, km, date, cost, returnNotes);
+      setMaintenanceRecords(prev => prev.map(r => r.id === rId ? { ...r, returnDate: date, cost: cost ?? r.cost, returnNotes } : r));
       setVehicles(prev => prev.map(v => v.id === vId ? { ...v, status: VehicleStatus.AVAILABLE, currentKm: km } : v));
     } finally {
       setIsLoading(false);
@@ -420,14 +444,14 @@ export const FleetProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   }, []);
 
   const contextValue = useMemo(() => ({
-    vehicles, drivers, activeTrips, completedTrips, scheduledTrips, maintenanceRecords, checklists, fines, notifications, auditLogs, isLoading,
+    vehicles, drivers, activeTrips, completedTrips, scheduledTrips, maintenanceRecords, checklists, fines, tireChanges, notifications, auditLogs, isLoading,
     currentUser, addVehicle, updateVehicle, addDriver, updateDriver, deleteDriver, startTrip, updateTrip, addScheduledTrip, updateScheduledTrip, deleteScheduledTrip, endTrip, cancelTrip,
-    addFine, deleteFine, addMaintenanceRecord, updateMaintenanceRecord, resolveMaintenance, markNotificationAsRead, changePassword,
+    addFine, deleteFine, addTireChange, deleteTireChange, addMaintenanceRecord, updateMaintenanceRecord, resolveMaintenance, markNotificationAsRead, changePassword,
     login, logout, resetDatabase
   }), [
-    vehicles, drivers, activeTrips, completedTrips, scheduledTrips, maintenanceRecords, checklists, fines, notifications, auditLogs, isLoading,
+    vehicles, drivers, activeTrips, completedTrips, scheduledTrips, maintenanceRecords, checklists, fines, tireChanges, notifications, auditLogs, isLoading,
     currentUser, addVehicle, updateVehicle, addDriver, updateDriver, deleteDriver, startTrip, updateTrip, addScheduledTrip, updateScheduledTrip, deleteScheduledTrip, endTrip, cancelTrip,
-    addFine, deleteFine, addMaintenanceRecord, updateMaintenanceRecord, resolveMaintenance, markNotificationAsRead, changePassword,
+    addFine, deleteFine, addTireChange, deleteTireChange, addMaintenanceRecord, updateMaintenanceRecord, resolveMaintenance, markNotificationAsRead, changePassword,
     login, logout, resetDatabase
   ]);
 

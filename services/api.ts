@@ -1,5 +1,5 @@
 
-import { Driver, Vehicle, Trip, Checklist, ScheduledTrip, VehicleStatus, MaintenanceRecord, Fine, AppNotification } from '../types';
+import { Driver, Vehicle, Trip, Checklist, ScheduledTrip, VehicleStatus, MaintenanceRecord, Fine, AppNotification, TireChange } from '../types';
 
 /**
  * BASE_URL configurada para o domínio de produção.
@@ -89,7 +89,6 @@ export const apiService = {
       }
       return user;
     } catch (error: any) {
-      // Fallback: Verificar primeiro se o admin atualizado existe no cache
       if (username === 'admin') {
         const cachedDrivers = storage.get<Driver[]>('drivers', []);
         const cachedAdmin = cachedDrivers.find(d => d.username === 'admin');
@@ -98,7 +97,6 @@ export const apiService = {
           return cachedAdmin;
         }
 
-        // Se não houver admin no cache ou senha não bater, tenta o padrão hardcoded de emergência
         if (pass === 'admin' && !cachedAdmin) {
           return {
             id: 'admin-id',
@@ -137,7 +135,6 @@ export const apiService = {
       return d;
     });
 
-    // Se for o admin e não foi encontrado na lista (ex: primeiro acesso), cria o registro no cache
     if (!found && (id === 'admin-id' || updates.username === 'admin')) {
       const mockAdmin: Driver = {
         id: id,
@@ -177,6 +174,23 @@ export const apiService = {
     const current = storage.get<Vehicle[]>('vehicles', []);
     storage.set('vehicles', [...current, vehicle]);
     return fetch(`${BASE_URL}/vehicles`, { method: 'POST', headers, body: JSON.stringify(vehicle) }).then(r => handleResponse(r)).catch(e => console.warn('Sync failed, saved locally.'));
+  },
+
+  // --- TIRES ---
+  async getTireChanges(): Promise<TireChange[]> {
+    return fetchWithFallback(`${BASE_URL}/tires`, { method: 'GET' }, 'tires', []);
+  },
+
+  async saveTireChange(tc: TireChange): Promise<void> {
+    const current = storage.get<TireChange[]>('tires', []);
+    storage.set('tires', [...current, tc]);
+    return fetch(`${BASE_URL}/tires`, { method: 'POST', headers, body: JSON.stringify(tc) }).then(r => handleResponse(r)).catch(e => console.warn('Sync failed, saved locally.'));
+  },
+
+  async deleteTireChange(id: string): Promise<void> {
+    const current = storage.get<TireChange[]>('tires', []);
+    storage.set('tires', current.filter(t => t.id !== id));
+    return fetch(`${BASE_URL}/tires/${id}`, { method: 'DELETE', headers }).then(r => handleResponse(r)).catch(e => console.warn('Sync failed, saved locally.'));
   },
 
   // --- TRIPS ---
@@ -245,10 +259,10 @@ export const apiService = {
     return fetch(`${BASE_URL}/maintenance/${id}`, { method: 'PATCH', headers, body: JSON.stringify(updates) }).then(r => handleResponse(r)).catch(e => console.warn('Sync failed, saved locally.'));
   },
 
-  async resolveMaintenance(vehicleId: string, recordId: string, km: number, date: string, cost?: number): Promise<void> {
+  async resolveMaintenance(vehicleId: string, recordId: string, km: number, date: string, cost?: number, returnNotes?: string): Promise<void> {
     const current = storage.get<MaintenanceRecord[]>('maintenance', []);
-    storage.set('maintenance', current.map(r => r.id === recordId ? { ...r, returnDate: date, cost: cost ?? r.cost } : r));
-    return fetch(`${BASE_URL}/maintenance/resolve`, { method: 'POST', headers, body: JSON.stringify({ vehicleId, recordId, km, date, cost }) }).then(r => handleResponse(r)).catch(e => console.warn('Sync failed, saved locally.'));
+    storage.set('maintenance', current.map(r => r.id === recordId ? { ...r, returnDate: date, cost: cost ?? r.cost, returnNotes } : r));
+    return fetch(`${BASE_URL}/maintenance/resolve`, { method: 'POST', headers, body: JSON.stringify({ vehicleId, recordId, km, date, cost, returnNotes }) }).then(r => handleResponse(r)).catch(e => console.warn('Sync failed, saved locally.'));
   },
 
   // --- FINES ---

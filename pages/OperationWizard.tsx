@@ -121,6 +121,13 @@ const OperationWizard: React.FC<OperationWizardProps> = ({ scheduledTripId, onCo
   const isKmInvalid = (checklist.km ?? 0) < (selectedVehicle?.currentKm ?? 0);
   const isSaoPaulo = useMemo(() => isLocationSaoPaulo(route.city, route.state, route.destination), [route.city, route.state, route.destination]);
 
+  const googleMapsUrl = useMemo(() => {
+    const originEnc = encodeURIComponent(route.origin);
+    const destEnc = encodeURIComponent(`${route.destination}, ${route.city} - ${route.state}`);
+    const waypointsEnc = route.waypoints.length > 0 ? `&waypoints=${route.waypoints.map(w => encodeURIComponent(w)).join('|')}` : '';
+    return `https://www.google.com/maps/dir/?api=1&origin=${originEnc}&destination=${destEnc}${waypointsEnc}&travelmode=driving`;
+  }, [route]);
+
   const handleStartTrip = () => {
     if (!selectedVehicle || !currentUser) return;
     
@@ -151,10 +158,7 @@ const OperationWizard: React.FC<OperationWizardProps> = ({ scheduledTripId, onCo
     startTrip(newTrip, finalChecklist);
     if (scheduledTripId) deleteScheduledTrip(scheduledTripId);
 
-    const originEnc = encodeURIComponent(route.origin);
-    const destEnc = encodeURIComponent(`${route.destination}, ${route.city} - ${route.state}`);
-    const waypointsEnc = route.waypoints.length > 0 ? `&waypoints=${route.waypoints.map(w => encodeURIComponent(w)).join('|')}` : '';
-    window.open(`https://www.google.com/maps/dir/?api=1&origin=${originEnc}&destination=${destEnc}${waypointsEnc}&travelmode=driving`, '_blank');
+    window.open(googleMapsUrl, '_blank');
 
     if (onComplete) onComplete();
   };
@@ -326,22 +330,64 @@ const OperationWizard: React.FC<OperationWizardProps> = ({ scheduledTripId, onCo
 
         {step === 4 && (
           <div className="p-10 space-y-8 animate-in zoom-in-95 duration-500 text-center">
-            <h3 className="text-2xl font-bold text-slate-800 uppercase tracking-tight">Confirmar Início da Viagem?</h3>
-            <div className="bg-slate-50 p-6 rounded-3xl border border-slate-100 text-left space-y-2">
-               <p className="text-[10px] text-slate-400 font-bold uppercase">Resumo da Operação</p>
-               <p className="text-sm font-bold text-slate-800">Veículo: {selectedVehicle?.plate} - {selectedVehicle?.model}</p>
-               <p className="text-sm font-bold text-slate-800">Destino: {route.destination}</p>
-               <p className="text-sm font-bold text-slate-800">Data: {new Date(route.tripDate).toLocaleDateString()}</p>
+            <div className="w-20 h-20 bg-emerald-50 text-emerald-600 rounded-full flex items-center justify-center text-3xl mx-auto mb-2">
+              <i className="fas fa-flag-checkered"></i>
+            </div>
+            <h3 className="text-2xl font-bold text-slate-800 uppercase tracking-tight">Revisão Final da Viagem</h3>
+            
+            <div className="bg-slate-50 p-8 rounded-[2rem] border border-slate-100 text-left space-y-6">
+               <div className="grid grid-cols-2 gap-4">
+                 <div>
+                    <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest mb-1">Veículo Escalado</p>
+                    <p className="text-sm font-bold text-slate-900">{selectedVehicle?.plate}</p>
+                    <p className="text-[10px] text-slate-500 font-medium">{selectedVehicle?.model}</p>
+                 </div>
+                 <div>
+                    <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest mb-1">Data de Partida</p>
+                    <p className="text-sm font-bold text-slate-900">{new Date(route.tripDate + 'T12:00:00').toLocaleDateString('pt-BR')}</p>
+                 </div>
+               </div>
+
+               <div className="pt-4 border-t border-slate-200">
+                  <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest mb-1">Destino Final</p>
+                  <p className="text-sm font-bold text-slate-900 leading-tight">{route.destination}</p>
+                  <p className="text-[10px] text-blue-600 font-bold uppercase mt-1">{route.city} / {route.state}</p>
+               </div>
+
+               <div className="pt-4 border-t border-slate-200">
+                  <a 
+                    href={googleMapsUrl} 
+                    target="_blank" 
+                    rel="noopener noreferrer"
+                    className="flex items-center justify-between p-4 bg-white border border-blue-100 rounded-2xl hover:border-blue-400 transition-all group shadow-sm"
+                  >
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 bg-blue-50 text-blue-600 rounded-xl flex items-center justify-center">
+                        <i className="fas fa-map-marked-alt"></i>
+                      </div>
+                      <span className="text-[11px] font-write text-slate-800 uppercase tracking-tight">Visualizar Rota no Google Maps</span>
+                    </div>
+                    <i className="fas fa-arrow-right text-slate-300 group-hover:text-blue-500 transition-colors"></i>
+                  </a>
+                  <p className="text-[9px] text-slate-400 font-medium mt-2 px-1 italic">* Verifique as condições de trânsito antes de iniciar o trajeto.</p>
+               </div>
+
                {checklist.comments && (
-                 <div className="mt-2 pt-2 border-t border-slate-200">
-                    <p className="text-[9px] text-slate-400 font-bold uppercase">Obs de Saída:</p>
-                    <p className="text-[10px] text-slate-600 italic">"{checklist.comments}"</p>
+                 <div className="pt-4 border-t border-slate-200">
+                    <p className="text-[9px] text-slate-400 font-bold uppercase mb-1">Observações de Saída</p>
+                    <p className="text-[10px] text-slate-600 italic leading-relaxed">"{checklist.comments}"</p>
                  </div>
                )}
             </div>
+
             <div className="pt-8 space-y-4">
-              <button onClick={handleStartTrip} className="w-full bg-emerald-600 text-white py-6 rounded-3xl font-write uppercase text-sm tracking-[0.3em] shadow-2xl hover:bg-emerald-700 transition-all active:scale-95">INICIAR AGORA</button>
-              <button onClick={handleCancelWizard} className="text-red-500 font-write uppercase text-[10px] tracking-widest font-bold">Cancelar</button>
+              <button 
+                onClick={handleStartTrip} 
+                className="w-full bg-emerald-600 text-white py-6 rounded-3xl font-write uppercase text-sm tracking-[0.3em] shadow-2xl hover:bg-emerald-700 transition-all active:scale-95 flex items-center justify-center gap-3"
+              >
+                <i className="fas fa-play text-xs"></i> INICIAR JORNADA AGORA
+              </button>
+              <button onClick={() => setStep(3)} className="text-slate-400 font-write uppercase text-[10px] tracking-widest font-bold">Corrigir Checklist</button>
             </div>
           </div>
         )}

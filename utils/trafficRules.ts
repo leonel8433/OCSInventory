@@ -30,39 +30,41 @@ export const checkSPRodizio = (plate: string, date: Date): boolean => {
 };
 
 /**
- * Identifica se uma localidade refere-se à CIDADE de São Paulo.
- * Corrigido para ignorar a validação apenas pelo estado (SP).
+ * Identifica se uma localidade refere-se à CIDADE de São Paulo de forma robusta.
  */
 export const isLocationSaoPaulo = (city?: string, state?: string, destination?: string): boolean => {
   const norm = (s: string) => (s || '').toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim();
   
   const c = norm(city);
+  const s = norm(state);
   const d = norm(destination);
 
-  // Palavras-chave que identificam especificamente a CIDADE/CAPITAL
-  const cityKeywords = [
-    'sao paulo', 
-    'sao paulo capital', 
-    'capital sao paulo', 
-    'sp capital', 
-    'capital sp'
-  ];
+  // Se o estado for explicitamente diferente de SP, não é a capital paulista
+  if (s !== '' && s !== 'sp' && s !== 'sao paulo') return false;
+
+  // 1. Verificação direta pelo campo cidade
+  // O IBGE retorna "São Paulo"
+  if (c === 'sao paulo') return true;
   
-  // 1. Se o campo Cidade foi preenchido, ele tem prioridade absoluta.
-  // Verificamos se a cidade é São Paulo (ignora se for apenas "SP" para evitar validar o estado todo)
-  if (c !== '') {
-    return cityKeywords.includes(c);
+  // 2. Verificação por palavras-chave comuns da capital
+  const capitalKeywords = ['sao paulo capital', 'capital sao paulo', 'sp capital', 'capital sp', 'sao paulo - sp', 'sao paulo/sp'];
+  if (capitalKeywords.includes(c)) return true;
+
+  // 3. Verificação no campo de destino (endereço completo)
+  // Procuramos por "São Paulo" no destino, garantindo que o estado seja SP ou não informado
+  const hasSaoPauloInDest = d.includes('sao paulo') || d.includes('capital sp') || d.includes('sp capital');
+  
+  if (hasSaoPauloInDest) {
+    // Evita falsos positivos como "Interior de São Paulo" ou "São José do Rio Preto"
+    // Se no destino aparecer "sao paulo" mas houver outra cidade paulista específica, pode ser falso.
+    // Mas para fins de segurança operacional, se contém "sao paulo" e não cita "interior", tratamos como capital.
+    if (d.includes('interior')) return false;
+    
+    // Se o estado é SP e o destino cita São Paulo, as chances são altas de passar pelo centro expandido
+    return true;
   }
 
-  // 2. Se a cidade estiver vazia, tentamos inferir pelo destino,
-  // mas garantimos que não estamos pegando apenas o estado.
-  const checkDest = cityKeywords.some(k => d.includes(k));
-  
-  // Evita falsos positivos como "Estado de São Paulo" ou endereços que apenas terminam em "SP"
-  const isGenericState = d === 'sp' || d === 'sao paulo' && (norm(state) === 'sp');
-  
-  // Se o destino contém as keywords da cidade e NÃO é uma menção genérica ao estado
-  return checkDest && !d.includes('interior') && !d.includes('estado de');
+  return false;
 };
 
 /**
