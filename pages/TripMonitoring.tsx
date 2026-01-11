@@ -57,7 +57,11 @@ const TripMonitoring: React.FC = () => {
   const { activeTrips, vehicles, drivers, updateTrip, endTrip, cancelTrip } = useFleet();
   const [finishingTripId, setFinishingTripId] = useState<string | null>(null);
   const [cancellingTripId, setCancellingTripId] = useState<string | null>(null);
+  const [addingNoteTripId, setAddingNoteTripId] = useState<string | null>(null);
+  
   const [cancelReason, setCancelReason] = useState('');
+  const [occurrenceText, setOccurrenceText] = useState('');
+  
   const [endKm, setEndKm] = useState<number>(0);
   const [fuelExpense, setFuelExpense] = useState<number>(0);
   const [otherExpense, setOtherExpense] = useState<number>(0);
@@ -95,6 +99,24 @@ const TripMonitoring: React.FC = () => {
       setEditingRouteTrip(null);
       alert('Rota atualizada!');
     }
+  };
+
+  const handleAddOccurrence = () => {
+    if (!addingNoteTripId || !occurrenceText.trim()) return;
+    
+    const trip = activeTrips.find(t => t.id === addingNoteTripId);
+    if (!trip) return;
+
+    const timestamp = new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+    const newNote = `[ADMIN ${timestamp}]: ${occurrenceText.trim()}`;
+    const updatedObservations = trip.observations 
+      ? `${trip.observations}\n${newNote}`
+      : newNote;
+    
+    updateTrip(trip.id, { observations: updatedObservations });
+    setOccurrenceText('');
+    setAddingNoteTripId(null);
+    alert('Nota adicionada ao log da viagem.');
   };
 
   const confirmFinish = () => {
@@ -149,7 +171,6 @@ const TripMonitoring: React.FC = () => {
             <div key={trip.id} className="bg-[#0f172a] rounded-[2.5rem] shadow-2xl border border-blue-400/30 overflow-hidden flex flex-col transition-all duration-500 animate-in zoom-in-95">
               
               <div className="flex flex-col">
-                {/* Informações da Viagem */}
                 <div className="p-8 space-y-8">
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-4">
@@ -163,26 +184,15 @@ const TripMonitoring: React.FC = () => {
                       </div>
                     </div>
                     <div className="flex gap-2">
-                      <div className="relative group">
-                        <button onClick={() => handleOpenExternalMap(trip)} className="w-10 h-10 bg-white/5 text-slate-400 rounded-xl flex items-center justify-center hover:bg-white/10 transition-all border border-white/5">
-                          <i className="fas fa-external-link-alt text-xs"></i>
-                        </button>
-                        <span className="absolute -top-8 left-1/2 -translate-x-1/2 bg-slate-800 text-white text-[8px] font-bold uppercase py-1 px-2 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none z-20">GPS Externo</span>
-                      </div>
-                      
-                      <div className="relative group">
-                        <button onClick={() => toggleMapVisibility(trip.id)} className={`w-10 h-10 rounded-xl flex items-center justify-center transition-all border ${isMapVisible ? 'bg-blue-600 text-white border-blue-600' : 'bg-white/5 text-slate-400 border-white/5 hover:bg-white/10'}`}>
-                          <i className="fas fa-map text-xs"></i>
-                        </button>
-                        <span className="absolute -top-8 left-1/2 -translate-x-1/2 bg-slate-800 text-white text-[8px] font-bold uppercase py-1 px-2 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none z-20">Ver Mapa</span>
-                      </div>
-
-                      <div className="relative group">
-                        <button onClick={() => handleOpenEditRoute(trip)} className="w-10 h-10 bg-white/5 text-slate-400 rounded-xl flex items-center justify-center hover:bg-white/10 transition-all border border-white/5">
-                          <i className="fas fa-route text-xs"></i>
-                        </button>
-                        <span className="absolute -top-8 left-1/2 -translate-x-1/2 bg-slate-800 text-white text-[8px] font-bold uppercase py-1 px-2 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none z-20">Alterar Rota</span>
-                      </div>
+                      <button onClick={() => setAddingNoteTripId(trip.id)} className="w-10 h-10 bg-white/5 text-slate-400 rounded-xl flex items-center justify-center hover:bg-white/10 transition-all border border-white/5" title="Adicionar Nota">
+                        <i className="fas fa-sticky-note text-xs"></i>
+                      </button>
+                      <button onClick={() => handleOpenExternalMap(trip)} className="w-10 h-10 bg-white/5 text-slate-400 rounded-xl flex items-center justify-center hover:bg-white/10 transition-all border border-white/5" title="Abrir GPS">
+                        <i className="fas fa-external-link-alt text-xs"></i>
+                      </button>
+                      <button onClick={() => toggleMapVisibility(trip.id)} className={`w-10 h-10 rounded-xl flex items-center justify-center transition-all border ${isMapVisible ? 'bg-blue-600 text-white border-blue-600' : 'bg-white/5 text-slate-400 border-white/5 hover:bg-white/10'}`} title="Mapa Rápido">
+                        <i className="fas fa-map text-xs"></i>
+                      </button>
                     </div>
                   </div>
 
@@ -220,7 +230,7 @@ const TripMonitoring: React.FC = () => {
                           <i className="fas fa-clipboard-list text-[10px]"></i> Diário de Bordo
                         </p>
                         <div className="max-h-24 overflow-y-auto custom-scrollbar pr-1">
-                          <p className="text-[10px] text-slate-300 font-medium leading-relaxed italic line-clamp-3">
+                          <p className="text-[10px] text-slate-300 font-medium leading-relaxed italic whitespace-pre-line">
                             {trip.observations}
                           </p>
                         </div>
@@ -231,7 +241,7 @@ const TripMonitoring: React.FC = () => {
                   <div className="flex gap-4 pt-4">
                     <button 
                       onClick={() => { setFinishingTripId(trip.id); setEndKm(vehicle?.currentKm || 0); }} 
-                      className="flex-[3] py-5 bg-emerald-500/90 hover:bg-emerald-400 text-white rounded-2xl font-write text-xs uppercase tracking-[0.2em] transition-all shadow-xl shadow-emerald-950/20 active:scale-95"
+                      className="flex-[3] py-5 bg-emerald-500/90 hover:bg-emerald-400 text-white rounded-2xl font-write text-xs uppercase tracking-[0.2em] transition-all shadow-xl active:scale-95"
                     >
                       Encerrar
                     </button>
@@ -254,7 +264,29 @@ const TripMonitoring: React.FC = () => {
         )}
       </div>
 
-      {/* Modal de Cancelamento Remoto (Admin) */}
+      {/* Modal Adicionar Nota/Ocorrência Remota */}
+      {addingNoteTripId && (
+        <div className="fixed inset-0 z-[280] flex items-center justify-center p-4 bg-slate-900/90 backdrop-blur-lg animate-in fade-in duration-300">
+          <div className="bg-white w-full max-w-md rounded-[2.5rem] shadow-2xl p-10 space-y-6">
+            <h3 className="text-xl font-write uppercase text-slate-800 tracking-tight text-center">Registrar Nota de Monitoramento</h3>
+            <div className="bg-slate-50 p-6 rounded-3xl border border-slate-200">
+               <textarea 
+                 autoFocus
+                 value={occurrenceText} 
+                 onChange={(e) => setOccurrenceText(e.target.value)} 
+                 className="w-full bg-transparent outline-none font-bold text-sm text-slate-950 min-h-[120px]" 
+                 placeholder="Digite aqui informações capturadas via rádio, paradas não planejadas ou alertas..." 
+               />
+            </div>
+            <div className="flex gap-4">
+              <button onClick={() => { setAddingNoteTripId(null); setOccurrenceText(''); }} className="flex-1 py-5 text-slate-400 font-write uppercase text-[10px]">Cancelar</button>
+              <button onClick={handleAddOccurrence} className="flex-[2] py-5 bg-blue-600 text-white rounded-2xl font-write uppercase text-[10px] shadow-lg">Adicionar ao Log</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal de Cancelamento Remoto */}
       {cancellingTripId && (
         <div className="fixed inset-0 z-[260] flex items-center justify-center p-4 bg-slate-900/90 backdrop-blur-lg animate-in fade-in duration-300">
           <div className="bg-white w-full max-w-md rounded-[2.5rem] shadow-2xl p-10 space-y-6 animate-in zoom-in-95 duration-300">

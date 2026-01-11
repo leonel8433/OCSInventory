@@ -44,6 +44,7 @@ export interface MaintenanceRecord {
   cost: number;
   km: number;
   notes: string;
+  categories?: string[]; // Campo para checklist de fechamento
 }
 
 export interface Fine {
@@ -76,8 +77,8 @@ export interface Driver {
   category: string; 
   email?: string;
   phone?: string;
-  company?: string; // Campo adicionado para vínculo corporativo
-  notes?: string;   // Campo adicionado para observações administrativas
+  company?: string; 
+  notes?: string;   
   username: string;
   password?: string;
   passwordChanged?: boolean; 
@@ -134,7 +135,7 @@ export interface AppNotification {
   title: string;
   message: string;
   vehicleId: string;
-  driverId?: string; // Campo adicionado para filtros por motorista
+  driverId?: string; 
   timestamp: string;
   isRead: boolean;
 }

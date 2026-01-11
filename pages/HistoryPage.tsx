@@ -42,6 +42,23 @@ const HistoryPage: React.FC = () => {
     window.open(`https://www.google.com/maps/dir/?api=1&origin=${origin}&destination=${dest}${wps}&travelmode=driving`, '_blank');
   };
 
+  // Helper para extrair observações específicas do checklist que foram salvas no campo observations
+  const extractChecklistObs = (obs: string) => {
+    if (!obs) return { departure: '', arrival: '', journey: '' };
+    const parts = obs.split('\n\nDIÁRIO DE BORDO:\n');
+    const logs = parts[1] || '';
+    const topPart = parts[0] || '';
+    
+    const departureMatch = topPart.match(/OBS_SAIDA: (.*?)(?= \| |$)/);
+    const arrivalMatch = topPart.match(/OBS_CHEGADA: (.*?)(?= \| |$)/);
+    
+    return {
+      departure: departureMatch ? departureMatch[1] : '',
+      arrival: arrivalMatch ? arrivalMatch[1] : '',
+      journey: logs || topPart.replace(/OBS_SAIDA: .*? \| /g, '').replace(/OBS_CHEGADA: .*?/g, '').trim()
+    };
+  };
+
   return (
     <div className="space-y-8 pb-10">
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
@@ -89,6 +106,7 @@ const HistoryPage: React.FC = () => {
               const driver = drivers.find(d => d.id === trip.driverId);
               const dateObj = new Date(trip.startTime);
               const totalExpenses = (trip.fuelExpense || 0) + (trip.otherExpense || 0);
+              const { departure, arrival, journey } = extractChecklistObs(trip.observations || '');
 
               return (
                 <div key={trip.id} className={`bg-white p-6 rounded-3xl shadow-sm border group hover:shadow-md transition-all flex flex-col gap-6 ${trip.isCancelled ? 'border-red-100 opacity-90' : 'border-slate-100'}`}>
@@ -150,21 +168,48 @@ const HistoryPage: React.FC = () => {
                     </div>
                   )}
 
-                  {!trip.isCancelled && (totalExpenses > 0 || trip.expenseNotes) && (
-                    <div className="pt-4 border-t border-slate-50 flex flex-wrap gap-4 items-center bg-slate-50/50 p-4 rounded-2xl">
-                      <div className="flex items-center gap-2">
-                         <i className="fas fa-gas-pump text-slate-300"></i>
-                         <span className="text-[10px] font-bold text-slate-400 uppercase">Abastecimento: <b className="text-slate-700 ml-1">R$ {trip.fuelExpense?.toFixed(2)}</b></span>
-                      </div>
-                      <div className="flex items-center gap-2">
-                         <i className="fas fa-file-invoice-dollar text-slate-300"></i>
-                         <span className="text-[10px] font-bold text-slate-400 uppercase">Extras: <b className="text-slate-700 ml-1">R$ {trip.otherExpense?.toFixed(2)}</b></span>
-                      </div>
-                      {trip.expenseNotes && (
-                        <div className="flex-1 bg-white p-2.5 rounded-xl border border-slate-100 italic text-[10px] text-slate-500">
-                          Obs: {trip.expenseNotes}
-                        </div>
-                      )}
+                  {!trip.isCancelled && (
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-4 border-t border-slate-50">
+                       <div className="bg-slate-50 p-4 rounded-2xl space-y-3">
+                          <div className="flex items-center gap-2">
+                             <i className="fas fa-file-signature text-blue-500 text-[10px]"></i>
+                             <p className="text-[9px] font-write text-slate-400 uppercase tracking-widest">Diário Técnico (Saída/Chegada)</p>
+                          </div>
+                          <div className="space-y-2">
+                             {departure && (
+                               <div className="bg-white p-3 rounded-xl border border-slate-100">
+                                  <p className="text-[8px] font-bold text-blue-600 uppercase">Saída:</p>
+                                  <p className="text-[10px] text-slate-600 italic leading-relaxed">"{departure}"</p>
+                                </div>
+                             )}
+                             {arrival && (
+                               <div className="bg-white p-3 rounded-xl border border-slate-100">
+                                  <p className="text-[8px] font-bold text-emerald-600 uppercase">Retorno:</p>
+                                  <p className="text-[10px] text-slate-600 italic leading-relaxed">"{arrival}"</p>
+                                </div>
+                             )}
+                             {!departure && !arrival && <p className="text-[10px] text-slate-300 italic">Sem observações técnicas registradas.</p>}
+                          </div>
+                       </div>
+
+                       <div className="flex flex-col gap-4">
+                          <div className="bg-slate-50 p-4 rounded-2xl flex flex-wrap gap-4 items-center">
+                            <div className="flex items-center gap-2">
+                               <i className="fas fa-gas-pump text-slate-300"></i>
+                               <span className="text-[10px] font-bold text-slate-400 uppercase">Abastecimento: <b className="text-slate-700 ml-1">R$ {trip.fuelExpense?.toFixed(2)}</b></span>
+                            </div>
+                            <div className="flex items-center gap-2">
+                               <i className="fas fa-file-invoice-dollar text-slate-300"></i>
+                               <span className="text-[10px] font-bold text-slate-400 uppercase">Extras: <b className="text-slate-700 ml-1">R$ {trip.otherExpense?.toFixed(2)}</b></span>
+                            </div>
+                          </div>
+                          {journey && (
+                            <div className="bg-amber-50/50 p-4 rounded-2xl border border-amber-100">
+                               <p className="text-[9px] font-write text-amber-600 uppercase mb-2 tracking-widest">Ocorrências de Trajeto</p>
+                               <p className="text-[10px] text-amber-800 italic leading-relaxed whitespace-pre-line">{journey}</p>
+                            </div>
+                          )}
+                       </div>
                     </div>
                   )}
                 </div>

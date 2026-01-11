@@ -126,9 +126,8 @@ const DashboardOverview: React.FC<DashboardOverviewProps> = ({ onStartSchedule, 
         return;
       }
       
-      const finalNotes = expenseNotes.trim() 
-        ? `NOTAS FINAIS: ${expenseNotes.trim()}\n\nDIÁRIO DE BORDO:\n${myActiveTrip.observations || 'Nenhuma ocorrência relatada.'}`
-        : myActiveTrip.observations || 'Nenhuma ocorrência relatada.';
+      const arrivalObs = expenseNotes.trim() ? `OBS_CHEGADA: ${expenseNotes.trim()}` : '';
+      const finalNotes = `${arrivalObs}\n\nDIÁRIO DE BORDO:\n${myActiveTrip.observations || 'Nenhuma ocorrência relatada.'}`;
 
       endTrip(myActiveTrip.id, endKm, new Date().toISOString(), {
         fuel: fuelExpense,
@@ -461,12 +460,14 @@ const DashboardOverview: React.FC<DashboardOverviewProps> = ({ onStartSchedule, 
               )}
 
               <div className="bg-slate-50 p-5 rounded-2xl border border-slate-100">
-                <label className="block text-[9px] font-write text-slate-400 uppercase mb-3 tracking-widest font-bold">Observações Finais do Trajeto</label>
+                <label className="flex items-center gap-2 text-[10px] font-write text-slate-400 uppercase mb-3 tracking-widest font-bold">
+                  <i className="fas fa-clipboard-check text-emerald-500"></i> Observações de Chegada (Checklist)
+                </label>
                 <textarea 
                   value={expenseNotes} 
                   onChange={(e) => setExpenseNotes(e.target.value)} 
-                  className="w-full bg-transparent outline-none font-write text-xs text-slate-950 min-h-[100px] leading-relaxed" 
-                  placeholder="Relate aqui o status da carga, descarga ou qualquer detalhe final do veículo..." 
+                  className="w-full bg-white border border-slate-200 p-4 rounded-3xl font-bold text-xs text-slate-950 min-h-[120px] outline-none focus:ring-2 focus:ring-emerald-500" 
+                  placeholder="Relate aqui o estado do veículo no retorno, eventuais avarias no trajeto ou status final da carga..." 
                 />
               </div>
             </div>
